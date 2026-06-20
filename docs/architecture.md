@@ -96,9 +96,12 @@ interface ToolCallView {                            // 読み手＝AgUiAdapter
     public function resultFor(string $id): ?ToolCallOutcome;  // {input, content, isError}
 }
 
-// --- host が agent 構築を担い、その中で recorder を配線する seam（S1）---
+// --- host が agent 構築を担い、その中で recorder 配線と履歴 seed を行う seam（S1）---
 interface InstrumentedAgentFactory {
-    public function create(ToolCallRecorder $recorder): OptionAwareStreamingAgentInterface;
+    /** @param list<Message> $history 再構成済み会話履歴（D15・最後の user を除く） */
+    public function create(ToolCallRecorder $recorder, array $history): OptionAwareStreamingAgentInterface;
+    /** @return list<string> agent に登録されたサーバツール名（D16: 宣言ツールとの交差用） */
+    public function knownToolNames(): array;
 }
 
 // --- 出力プリミティブ（S4・既存）---
@@ -119,12 +122,18 @@ final class DefaultInstrumentedAgentFactory implements InstrumentedAgentFactory 
         private array $tools, private string $systemPrompt,
     ) {}
 
-    public function create(ToolCallRecorder $rec): OptionAwareStreamingAgentInterface {
-        return new StreamingAgent(
+    public function create(ToolCallRecorder $rec, array $history): OptionAwareStreamingAgentInterface {
+        $agent = new StreamingAgent(
             new RecordingStreamingLlmClient($this->client, $rec),  // S5
             new RecordingDispatcher($this->dispatcher, $rec),      // S5
             $this->tools, $this->systemPrompt,
         );
+        $agent->messages = $history;   // D15: 履歴 seed（ToolUse の history API 欠如をカバー）
+        return $agent;
+    }
+
+    public function knownToolNames(): array {       // D16
+        return array_map(static fn (Tool $t) => $t->name, $this->tools);
     }
 }
 ```
@@ -144,6 +153,7 @@ final class DefaultInstrumentedAgentFactory implements InstrumentedAgentFactory 
 final class AgUiRunner {
     public function __construct(
         private InstrumentedAgentFactory $agentFactory,
+        private MessageHistoryMapper $historyMapper,   // D15: messages[] → list<Message>
         private SseEncoder $encoder,
         private ?LoggerInterface $logger = null,
         private array $inputProcessors = [],   // ALPS safeOnly 等（D4/ADR0004）
@@ -151,10 +161,15 @@ final class AgUiRunner {
 
     public function run(RunAgentInput $input, SseSinkInterface $sink): void {
         $registry = new ToolCallRegistry();                       // per-run（recorder & view）
-        $agent    = $this->agentFactory->create($registry);      // S1: decorators を内部配線（S5）
+        $history  = $this->historyMapper->map($input->historyMessages());  // D15: messages[] → list<Message>
+        $agent    = $this->agentFactory->create($registry, $history);     // S1: decorators 配線 + 履歴 seed
+        $declared = $input->declaredToolNames();                          // D16: lenient 交差
+        $enabled  = $declared === []
+            ? null                                                        // 空 → 絞らない（ALPS が統治）
+            : array_values(array_intersect($declared, $this->agentFactory->knownToolNames()));
         $options  = AgentOptions::withProcessors(
             inputProcessors: $this->inputProcessors,
-            enabledTools: $input->declaredToolNames() ?: null,   // RunAgentInput.tools → withTools
+            enabledTools: $enabled,                              // 未知名（client-side tool）は除外
         );
         $agentStream = $agent->runStream($input->lastUserMessage(), $options); // S2 上流
         $adapter   = new AgUiAdapter($input->threadId, $input->runId, $registry, $this->logger);
