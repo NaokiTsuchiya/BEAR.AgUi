@@ -8,8 +8,12 @@
             "email": "ntsuchiya1105@gmail.com"
         }
     ],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
     "require": {
-        "php": "^8.2"
+        "php": "^8.2",
+        "psr/log": "^3.0",
+        "bear/tool-use": "dev-codex/review-hardening"
     },
     "require-dev": {
         "bamarni/composer-bin-plugin": "^1.8",
