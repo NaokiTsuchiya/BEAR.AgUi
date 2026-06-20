@@ -104,3 +104,45 @@
     （Adapter＝読）。同一実体を二面で渡す（ISP）。
   - スコープ：app 単一＝factory/encoder/logger・実 LLM/Dispatcher、per-request＝`SseSinkInterface`、
     per-run＝registry/agent/adapter。run をまたいで状態共有しない。
+  - 補足（D15）：`create()` は history 引数も取る → `create(ToolCallRecorder, array $history)`。
+
+## M1 詳細決定
+
+- **D15 (Q-M1-1) `確定` マルチターン会話履歴は repo 側カバーで対応**（feedback と両建て・enrichment と同パターン）。
+  - 前提整理：AG-UI は毎 run で `messages[]` を全送（履歴の正本はクライアント／サーバはステートレス）。
+    **ReAct ループ自体は単一 run 内で完結**（ToolUse の `runStream` が reason/act/observe を回す）。multi-turn が
+    足すのは「会話メモリ」で、AG-UI プロトコルとは**別レイヤー**（保管＝クライアント/app、再構成＝本ライブラリの
+    `Input` 境界）。`messages[]` が毎回来るのでサーバ側に状態ストアは不要。
+  - 実装：`MessageHistoryMapper`（`…\ToolUse\` namespace＝tool-use 結合ゾーン）が `messages[]`（**最後の user を
+    除く**）→ `list<BEAR\ToolUse\Runtime\Message>` に再構成。`UserMessage`→`user`、`AssistantMessage(content+
+    toolCalls)`→`assistant([text + tool_use blocks])`（`function.arguments` JSON を decode）、**連続する
+    `ToolMessage`→1つの `Message::toolResults([...])` にグルーピング**、System/Developer/Activity/Reasoning は skip。
+  - seed：`StreamingAgent.$messages`（public）へ代入。配線は D14 factory に history 引数を追加し、
+    `DefaultInstrumentedAgentFactory` が `$agent->messages = $history` を行う。
+  - **制約：全再構成（tool_use ↔ tool_result をペアで）**。テキストだけ等の部分履歴は「結果の見えないツール
+    呼び出し」を生み ReAct を壊すため不可。テストはペア・グルーピング・並行ツールの整合を重点検証。
+  - feedback：`public $messages` 直叩きは非公開契約のため、ToolUse に「**履歴を seed する正式 API**」
+    （例 `runStream(array $history, string $userMessage)` / `withHistory(Message[])`）を要望（→ feedback doc）。
+    API 後は seed 手段のみ差し替え、mapper（AG-UI→ToolUse 変換）は残る。
+  - スコープ：multi-turn を後続から **M1 に格上げ**。
+
+- **D16 (Q-M1-2) `確定` 未宣言ツール名は lenient 交差で扱う（エラーにしない）**。
+  - AG-UI の `tools[]` はクライアント提供のツール定義で、**client-side tool（フロント実行）を含みうる**＝
+    サーバに無い名は正常。strict に HTTP 400 / RUN_ERROR を返すと標準 AG-UI クライアントを壊すため却下。
+  - **`enabledTools = declaredToolNames() ∩ factory.knownToolNames()`**。未知名は黙って除外（debug ログ）。
+    → `withTools` に未知名が渡らず `InvalidArgumentException` も起きない（Q-M1-2 の「400 か RUN_ERROR か」が消える）。
+  - 空宣言（`tools[]=[]`）→ `enabledTools = null`（フィルタしない。ALPS ポリシー safeOnly 等が露出を統治）。非空→交差。
+  - **エラー二分法は維持**：構造不正の入力＝HTTP 400（`fromJson`）、実行中のツール失敗＝`RUN_ERROR`（HTTP 200）。
+    未知ツール名は「エラー」ではなく「未サポートの client-side tool」として扱う。
+  - seam：`InstrumentedAgentFactory::knownToolNames(): list<string>` を追加（`DefaultInstrumentedAgentFactory`
+    は `$this->tools` から1行）。
+  - **client-side tool 実行は v1 非対応**（宣言されてもサーバは実行しない）と明記。
+
+- **D17 (Q-M1-3) `確定` `UserMessage.content` は text 抽出で正規化、マルチモーダル入力は v1 非対応**。
+  - `string`→そのまま。`InputContent[]`→ `type:"text"` パートのみ `\n` 連結、非テキスト（image/file）は**除外**
+    （debug ログ）。抽出結果が空（text パート無し / `[]`）→ **HTTP 400**（接続前検証）。
+  - 理由：降ろし先 ToolUse の `Message::user` / `runStream` が **text-only**。マルチモーダルは ToolUse 側の
+    マルチモーダル `Message` 対応が前提（低優先 feedback 候補・resume/history/enrichment より下）。
+  - 置き場所：`content → text` 抽出は純 AG-UI（tool-use 非依存）なので `Input/` 層の共有ヘルパー
+    （例 `UserContent::toText(string|array): string`）。`lastUserMessage()` と `MessageHistoryMapper`（D15）で再利用。
+  - ⚠️ 実装時に `InputContent` の判別子（`type:"text"` と text フィールド名）を AG-UI 型定義で確認。

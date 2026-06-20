@@ -90,10 +90,30 @@ public function resumeStream(array $messages, array $resume, ?AgentOptions $opti
 なお `confirmation_required` は `toolName/toolId/input/message` を持ち、**interrupt の payload にそのまま
 対応する**。ここは良好で、欠けているのは resume 再入のみ。
 
+## 会話履歴を seed する正式 API（中優先）
+
+`runStream(string $userMessage, ?AgentOptions)` は単一メッセージしか取らず、**過去の会話履歴を渡す入口が無い**。
+AG-UI はマルチターンで毎 run `messages[]`（履歴フル）を送ってくるため、サーバはそれを `StreamingAgent` の
+会話状態へ seed して続きを回したい。現状は **`public array $messages` への直接代入**で代替できるが、これは
+公開契約ではなく将来変わりうる。
+
+要望：履歴を seed する**支援された API**。例：
+
+```php
+public function runStream(array $history, string $userMessage, ?AgentOptions $options = null): Generator;
+// もしくは
+public function withHistory(array $messages): static;   // list<Message>
+```
+
+これがあれば BEAR.AgUi 側の `MessageHistoryMapper`（AG-UI `messages[]` → `list<Message>` 変換）から
+クリーンに seed できる（変換自体は AG-UI 固有なので BEAR.AgUi 側に残る）。`resume`（前述）とも、
+「ターン境界をまたいで会話を継続する」という同じ根（history 入口の欠如）を共有する。
+
 ## まとめ
 
 - **必須**: ステートレス resume 再入 API（上記）。これが無いと AgentCore 等での AG-UI 準拠 interrupt は
   ToolUse 無改造では実装できない。
+- **中優先**: 会話履歴を seed する正式 API（`public $messages` 直叩きを置換）。マルチターン対応の前提。
 - **中優先**: tool 系 `AgentEvent` のエンリッチ（`tool_start.toolCallId` / `tool_result.toolCallId` + `content`）。
   特に `tool_result.content` 欠落は、AG-UI のツール結果が「ツール名」になってしまう実害がある。
 - **任意**: `tool_args` ストリーミング（無くても `tool_start.input` の一括で代替可）。

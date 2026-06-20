@@ -43,10 +43,17 @@ poc の実証済み層を本体 `src/`・`tests/` へ移植し、実 `bear/tool-
 
 ## M1 — ファサード `AgUiRunner` + 起動マッピング（ADR 0001/0004/0006）
 
+> **詳細タスク**: [`tasks-m1.md`](tasks-m1.md)（ファイル/クラス/メソッド粒度、着手順）
+
 入力境界からエージェント起動・SSE 配信までを 1 つのファサードにまとめる。
 
 - `RunAgentInput::lastUserMessage()` → `runStream($msg, $options)`
-- `declaredToolNames()` → `AgentOptions::withTools($names)`
+- **マルチターン履歴の再構成（D15）**：`MessageHistoryMapper` が `messages[]`（最後の user を除く）→
+  `list<ToolUse Message>` に**全再構成**（assistant の tool_use ↔ tool_result をペアで・連続 ToolMessage は
+  grouping）。factory が `StreamingAgent.$messages` へ seed。`public $messages` 直叩きはカバーで、ToolUse へ
+  「履歴 seed の正式 API」を feedback（→ [`feedback/tool-use-resume.md`](feedback/tool-use-resume.md)）
+- ツール解決（D16・lenient 交差）：`enabledTools = declaredToolNames() ∩ factory.knownToolNames()`、空宣言は
+  `null`（ALPS が統治）。未知名（client-side tool）は黙って除外＝エラーにしない（AG-UI 互換）
 - ALPS ツール制御は PR #22 の `AlpsToolPolicyInputProcessor::safeOnly()` 等を `AgentOptions` に渡すだけ
 - `confirmation_required` → `RunFinished{outcome:interrupt}` で run 終了（**v1 は resume 未対応・前方互換**）
 - **`InstrumentedAgentFactory`（IF）+ `DefaultInstrumentedAgentFactory`（既定実装）** を追加。`StreamingAgent`
@@ -88,6 +95,8 @@ poc の実証済み層を本体 `src/`・`tests/` へ移植し、実 `bear/tool-
 - AgentCore デプロイ・ARM64 コンテナ・OAuth/SigV4 認証（ADR 0005）
 - state-as-resource / `STATE_SNAPSHOT` / `STATE_DELTA`（ADR 0003）— アプリ側で実装
 - ALPS ツール供給（ADR 0004）— `bear/tool-use` 本体が担う
+- **client-side tool 実行**（フロント実行ツール）— v1 非対応。AG-UI `tools[]` の未知名は除外（D16）
+- **マルチモーダル入力**（画像等の `InputContent[]`）— v1 非対応。text パートのみ抽出（D17）。ToolUse は text-only
 - **本物の interrupt / resume**（ToolUse 側に resume 再入 API が入り次第。`feedback/tool-use-resume.md`）
 - `TOOL_CALL_ARGS` 引数ストリーミング / 複数ツールの `toolCallId` 対応づけ（ToolUse feedback 反映待ち）
 
