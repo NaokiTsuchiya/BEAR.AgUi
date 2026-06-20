@@ -1,0 +1,14 @@
+{
+    "require-dev": {
+        "phpmd/phpmd": "^3.0 || 3.x-dev",
+        "pdepend/pdepend": "^3.0 || 3.x-dev",
+        "phpmetrics/phpmetrics": "3.0.0@rc || ^3.0",
+        "carthage-software/mago": "^1.30"
+    },
+    "config": {
+        "allow-plugins": {
+            "composer/package-versions-deprecated": true,
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
+    }
+}

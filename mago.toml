@@ -1,0 +1,54 @@
+#:schema https://mago.carthage.software/1.30.0/schema.json
+# Welcome to Mago!
+# For full documentation, see https://mago.carthage.software/1.30.0/en/tools/overview/
+version = "1"
+php-version = "8.2.0"
+
+[source]
+workspace = "."
+paths = ["src/", "tests"]
+includes = ["vendor"]
+excludes = []
+
+[source.glob]
+literal-separator = true
+
+[formatter]
+preset = "default"
+
+[linter]
+integrations = ["phpunit"]
+
+[linter.rules]
+ambiguous-function-call = { enabled = false }
+literal-named-argument = { enabled = false }
+halstead = { effort-threshold = 7000 }
+
+[analyzer]
+plugins = []
+find-unused-definitions = true
+find-unused-expressions = true
+find-overly-wide-return-types = true
+analyze-dead-code = true
+memoize-properties = true
+check-throws = true
+check-missing-override = true
+find-unused-parameters = true
+check-property-initialization = true
+class-initializers = ["setUp"]
+strict-list-index-checks = true
+strict-array-index-existence = true
+no-boolean-literal-comparison = true
+check-missing-type-hints = true
+check-closure-missing-type-hints = true
+check-arrow-function-missing-type-hints = true
+trust-existence-checks = false
+check-use-statements = true
+check-name-casing = true
+enforce-class-finality = true
+require-api-or-internal = true
+check-experimental = true
+allow-side-effects-in-conditions = false
+
+unchecked-exceptions = ["Error", "LogicException", "PHPUnit\\Framework\\Exception"]
+unchecked-exception-classes = []
