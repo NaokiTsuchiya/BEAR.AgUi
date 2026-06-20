@@ -1,0 +1,106 @@
+# 決定ログ（Decision Log）
+
+実装を進める中で確定した判断の記録。設計の大方針は [`adr/`](adr/0000-0006-ag-ui-support.md)、
+全体像は [`architecture.md`](architecture.md)、進め方は [`milestones.md`](milestones.md)。
+ここには「実装レベルで何をどう決めたか」を時系列で残す。
+
+凡例：`確定` = 合意済み / `保留` = 未決 / `却下` = 採用しない。
+
+---
+
+## スコープ・基盤
+
+- **D1 `確定` スコープ = AG-UI アダプターライブラリ**。`bear/tool-use` のエージェント出力（`AgentEvent`）を
+  AG-UI プロトコル（イベント + SSE 直列化）へ変換する部分のみ。**BEAR.Sunday には依存しない**
+  （依存は `bear/tool-use` のみのフレームワーク非依存ライブラリ）。AgentCore デプロイ・state-as-resource・
+  ALPS 供給はスコープ外（アプリ/ToolUse 側の関心事）。
+- **D2 `確定` namespace = `NaokiTsuchiya\BEARAgUi\`**（既存 composer 設定を踏襲）。**1クラス1ファイル**で配置。
+- **D3 `確定` `bear/tool-use` を require**。PR #22 = ブランチ `dev-codex/review-hardening`（packagist:
+  `dev-codex/review-hardening`）。**PHP は `^8.2` 据え置き**（既存 composer.json / `bear/tool-use` と同じ）。
+  オープン PR ブランチ pin のため揺れる前提。タグが切られ次第差し替え。
+  - 補足（当初の誤り訂正）：「`#[Override]` が 8.3+ だから ^8.3 必須」は誤り。`#[Override]` は 8.2 では
+    no-op 属性で fatal にならない（reflect しない限り評価されない／override チェックは 8.3+ のみ）。
+    `bear/tool-use` 自身が `^8.2` で `#[Override]` を使用している。よって ^8.2 で揃える。
+- **D7 `確定` example は2種**：①素 PHP HTTP サーバ（フレームワーク非依存・**結合テスト対象**）、
+  ② BEAR.Sunday ショーケースアプリ。テストは **LLM 不要の scripted StreamingAgent** で決定論的に回す。
+
+## interrupt / confirmation
+
+- **D4 `確定` interrupt は v1 非必須**。AG-UI の interrupt は「run 終了 + 新 run + `resume[]`」のターミナル
+  モデルで、ToolUse の `send(bool)` in-process モデルとは写像不能。v1 は `confirmation_required` →
+  `RUN_FINISHED{outcome:interrupt}` で **run を終了**（ツール非実行＝安全）。**resume は未対応だが前方互換**。
+  本物の interrupt は ToolUse 側に resume 再入 API が入り次第（→ [`feedback/tool-use-resume.md`](feedback/tool-use-resume.md)）。
+- **D6 `確定` 偽 `INTERRUPT` イベントは削除**。AG-UI に `INTERRUPT` イベントは存在しない。
+  `RunFinished` に `outcome` フィールドを追加して表現する。
+- **D5 `確定` WebSocket はサポートしない**。AG-UI は SSE デフォルトで成立。ADR/docs から記述も削除済み。
+
+## AG-UI イベント仕様（実スキーマ照合済み）
+
+- **D8 `確定` イベントのフィールドは公式スキーマに準拠**（poc を鵜呑みにしない）。照合結果：
+  - `ToolCallEnd` は `ToolCallResult` の**前に必須**（順序 Start→[Args]→**End**→Result）
+  - `ToolCallResult.messageId` は**必須**
+  - `RunFinished.outcome` =（`{type:"success"}` | `{type:"interrupt",interrupts:[]}`）、`result` は root に optional
+  - `RunError`：`message` 必須・`code` optional
+  - 共通：`type`・`timestamp`(optional)・`rawEvent`(optional)。wire `type` は SCREAMING_SNAKE
+- **D-ToolUse `参考` ToolUse 側への要望**を [`feedback/tool-use-resume.md`](feedback/tool-use-resume.md) に記録
+  （ステートレス resume 再入 API、高レベル `AgentEvent` への `toolCallId` 付与）。
+
+---
+
+## M0 詳細決定（議論中）
+
+- **D9 (Q1) `確定` 並行/複数ツールを FIFO キューで正しく対応**。poc の単一スロット `lastToolCallId` を、
+  synthesize した `toolCallId` の **FIFO キュー**に置換する（`tool_start` で enqueue、`tool_result` で
+  dequeue）。ToolUse の dispatch は pending を開始順に処理し結果も開始順に来る（実コードで確認）ため、
+  FIFO で start↔result が正しく対応づく。1ターン複数 tool_use（Claude の並行ツール呼び出し）でも崩れない。
+  - 却下：案② 単一ツール前提で `lastToolCallId` のまま受容（将来必ず踏むバグを仕様化するだけ）。
+  - 補足：D10 採用後は synthesize id ではなく**レジストリ由来の実 id** を FIFO 順で対応づける（相関は
+    高レベル `AgentEvent` のタイムライン ↔ レジストリ登録順）。
+
+- **D10 (Q2) `確定` ツール情報の不足は ToolUse 無改造の「デコレータ + レジストリ」代替実装で補う（Tier 2）**。
+  `AgentEvent` は `toolCallId` / 引数 / 結果 `content` を捨てているため、AG-UI の `TOOL_CALL_*` を正しく作れない
+  （現状 `TOOL_CALL_RESULT.content` がツール名になる実害あり）。ソース patch は却下（オープン PR ブランチで
+  force-push の度に壊れる）。代わりに ToolUse の公開注入点をデコレートして不足データを横取りする：
+  - `ToolCallRegistry`：横取りしたデータ（実 id / input / content / isError）を保持
+  - `RecordingDispatcher`（`DispatcherInterface` デコレータ）：`dispatch()` から id + input + content を記録
+  - `RecordingStreamingLlmClient`（`StreamingLlmClientInterface` デコレータ）：`TOOL_USE_START` から
+    **tool 開始時に実 id を早期取得**（Tier 2 = 早期 `TOOL_CALL_START` を発火）
+  - Adapter は `Generator<AgentEvent>`（タイムライン）＋ `ToolCallRegistry`（不足データ）を受けて enrich
+  - **撤去条件**: ToolUse が `tool_start`/`tool_result` をエンリッチしたら（→ feedback）デコレータを削除
+  - 却下：Tier 1（Dispatcher デコレータのみ・`TOOL_CALL_START` が tool 完了時発火）。AG-UI はストリーミング
+    UI が主眼で「呼び出し中」の早期表示が要るため Tier 2 を採用。
+
+- **D11 (Q3) `確定` `RunError` は固定ポリシー（案A）で開始、必要時に差し替え式（案C）へ非破壊昇格**。
+  クライアント（SSE→ブラウザ）には **汎用 `message`** + 安定 `code` `"AGENT_ERROR"` のみを出す。実例外は
+  注入した logger（PSR-3 optional、無ければ no-op）へ。`$e->getMessage()` の素通しは情報漏洩のため却下。
+  - 検証エラーは HTTP 400（別経路）なので RunError の code は当面 `AGENT_ERROR` 一本でよい。
+  - 将来 code を例外型ごとに分けたい等の要求が出たら、固定ロジックを `DefaultRunErrorMapper` に抽出して
+    `RunErrorMapperInterface` を切る（案C）。今は YAGNI で IF を足さない。
+
+- **D12 (Q4) `確定` `completed.fullText` は捨てる**。テキストは `text_delta` → `TEXT_MESSAGE_CONTENT` で
+  逐次送信済みのため、`AgentEvent::completed` は「開いているメッセージを閉じる」境界としてのみ使い、`fullText` は
+  `RunFinished.result` に載せない（全文二重送信を避ける）。クライアントは `TEXT_MESSAGE_CONTENT` の結合で
+  最終文を再構築できる。`result` が必要になれば後から非破壊で追加可能。
+
+- **D13 (Q5) `確定` テストは Fake を下位境界に下げ、実 `StreamingAgent` を回す**。`FakeStreamingAgent`
+  （ToolUse の振る舞いを模倣）は書かない。代わりに `FakeStreamingLlmClient`（scripted `StreamEvent`）＋
+  `FakeDispatcher`（scripted `ToolResult`）を注入して**実 `StreamingAgent::runStream()` に本物の AgentEvent 列を
+  生成させる**。理由：手書き Fake は ToolUse（動くオープン PR ブランチ）の思い込みになり、ToolUse が変わっても
+  緑のまま乖離する。実コードを回せば乖離時に契約テストが落ちて気づける。Fake 位置を LLM ワイヤ（`StreamEvent`、
+  D10 デコレータがどのみち読む契約）に下げることで、本番と同じ配線（デコレータが実 IF を包む）を検証できる。
+  - テスト二層：(1) **Adapter ユニット**＝単純な `Generator<AgentEvent>` を直接流す（ToolUse 非依存）。
+    (2) **契約/結合**＝実 StreamingAgent + Fake LLM/Dispatcher + デコレータ + Adapter の全鎖。
+    シナリオ：①テキストのみ ②単一ツール ③並行ツール（D9）④confirmation（→interrupt）⑤実行中エラー。
+  - 遅延性：poc `verify.php` RUN3 を移植し、生成 vs write の interleave を spy で順序検証。
+
+- **D14 `確定` `AgUiRunner` は組み上げ済み agent ではなく `InstrumentedAgentFactory` を受ける**
+  （アーキテクチャ精緻化で判明 → [architecture](architecture.md) §4-5）。`StreamingAgent` は final で依存が
+  private のため、エンリッチ用デコレータ（D10）を**後付けできない**。よって「agent を作る前に依存を包む」＝
+  factory がエンリッチ配線を担う形にする。
+  - `InstrumentedAgentFactory::create(ToolCallRecorder): OptionAwareStreamingAgentInterface`（IF）＋
+    素の `StreamingAgent` 用 `DefaultInstrumentedAgentFactory`（既定実装）を同梱。AgentFactory/AgentPool を
+    使うアプリは IF を自前実装して同じ配線にできる。
+  - `ToolCallRegistry` を **read/write の 2 IF に分離**：`ToolCallRecorder`（デコレータ＝書）/ `ToolCallView`
+    （Adapter＝読）。同一実体を二面で渡す（ISP）。
+  - スコープ：app 単一＝factory/encoder/logger・実 LLM/Dispatcher、per-request＝`SseSinkInterface`、
+    per-run＝registry/agent/adapter。run をまたいで状態共有しない。
