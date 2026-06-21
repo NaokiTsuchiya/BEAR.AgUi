@@ -34,11 +34,26 @@ final readonly class RecordingDispatcher implements DispatcherInterface
     /**
      * @throws Throwable propagated from the wrapped dispatcher; the calling
      *                   StreamingAgent translates it into a tool-result error.
+     *                   Before re-throwing we record an error outcome so the
+     *                   adapter still has content to render — StreamingAgent's
+     *                   own catch is the only path that synthesizes the
+     *                   ToolResult downstream, and our enrichment registry
+     *                   would otherwise be blank for this call id.
      */
     #[Override]
     public function dispatch(ToolCall $toolCall): ToolResult
     {
-        $result = $this->inner->dispatch($toolCall);
+        try {
+            $result = $this->inner->dispatch($toolCall);
+        } catch (Throwable $error) {
+            $this->recorder->recordResult(
+                $toolCall,
+                ToolResult::error($toolCall->id, $error::class . ': ' . $error->getMessage()),
+            );
+
+            throw $error;
+        }
+
         $this->recorder->recordResult($toolCall, $result);
 
         return $result;

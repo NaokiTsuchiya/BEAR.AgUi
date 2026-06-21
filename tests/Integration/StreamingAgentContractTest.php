@@ -1,0 +1,323 @@
+<?php
+
+declare(strict_types=1);
+
+namespace NaokiTsuchiya\BEARAgUi\Tests\Integration;
+
+use BEAR\ToolUse\Llm\StreamEvent;
+use BEAR\ToolUse\Runtime\StreamingAgent;
+use BEAR\ToolUse\Schema\Tool;
+use NaokiTsuchiya\BEARAgUi\Adapter\AgUiAdapter;
+use NaokiTsuchiya\BEARAgUi\Event\AgUiEventInterface;
+use NaokiTsuchiya\BEARAgUi\Event\RunError;
+use NaokiTsuchiya\BEARAgUi\Event\RunFinished;
+use NaokiTsuchiya\BEARAgUi\Event\RunStarted;
+use NaokiTsuchiya\BEARAgUi\Event\TextMessageContent;
+use NaokiTsuchiya\BEARAgUi\Event\TextMessageEnd;
+use NaokiTsuchiya\BEARAgUi\Event\TextMessageStart;
+use NaokiTsuchiya\BEARAgUi\Event\ToolCallArgs;
+use NaokiTsuchiya\BEARAgUi\Event\ToolCallEnd;
+use NaokiTsuchiya\BEARAgUi\Event\ToolCallResult;
+use NaokiTsuchiya\BEARAgUi\Event\ToolCallStart;
+use NaokiTsuchiya\BEARAgUi\Tests\Fake\FakeDispatcher;
+use NaokiTsuchiya\BEARAgUi\Tests\Fake\FakeStreamingLlmClient;
+use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingDispatcher;
+use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingStreamingLlmClient;
+use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;
+use PHPUnit\Framework\TestCase;
+
+/**
+ * End-to-end contract tests that drive a REAL StreamingAgent through the
+ * recording decorators and adapter — to catch any drift between assumptions
+ * and ToolUse's actual emission order. The only fakes are at the LLM/Dispatcher
+ * boundary (scripted StreamEvents and ToolResults).
+ *
+ * Justification for not using a hand-rolled FakeStreamingAgent: see
+ * decisions.md D13.
+ */
+final class StreamingAgentContractTest extends TestCase
+{
+    public function testTextOnlyScenarioYieldsLifecycleAndTextBoundaries(): void
+    {
+        $llm = new FakeStreamingLlmClient();
+        $llm->queueScript([
+            new StreamEvent(StreamEvent::TEXT_DELTA, ['text' => 'hello ']),
+            new StreamEvent(StreamEvent::TEXT_DELTA, ['text' => 'world']),
+            new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
+            new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => 'end_turn']),
+        ]);
+
+        [$events] = $this->runPipeline($llm, new FakeDispatcher(), [], 'hi');
+        $types = $this->types($events);
+
+        self::assertSame([
+            RunStarted::class,
+            TextMessageStart::class,
+            TextMessageContent::class,
+            TextMessageContent::class,
+            TextMessageEnd::class,
+            RunFinished::class,
+        ], $types);
+        self::assertSame('hello ', $events[2]->delta);
+        self::assertSame('world', $events[3]->delta);
+    }
+
+    public function testSingleToolCallRoundTripUsesRealRegistryData(): void
+    {
+        $llm = new FakeStreamingLlmClient();
+        // Iteration 1: LLM asks for a tool.
+        $llm->queueScript([
+            new StreamEvent(StreamEvent::TOOL_USE_START, ['id' => 'call-1', 'name' => 'search']),
+            new StreamEvent(StreamEvent::TOOL_USE_DELTA, ['input' => '{"q":"hi"}']),
+            new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
+            new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => 'tool_use']),
+        ]);
+        // Iteration 2: after tool result, LLM finalizes.
+        $llm->queueScript([
+            new StreamEvent(StreamEvent::TEXT_DELTA, ['text' => 'done']),
+            new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
+            new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => 'end_turn']),
+        ]);
+
+        $dispatcher = new FakeDispatcher();
+        $dispatcher->queueSuccess('search', 'hits');
+
+        [$events] = $this->runPipeline($llm, $dispatcher, [$this->tool('search')], 'hi');
+        $types = $this->types($events);
+
+        self::assertSame([
+            RunStarted::class,
+            ToolCallStart::class,
+            ToolCallArgs::class,
+            ToolCallEnd::class,
+            ToolCallResult::class,
+            TextMessageStart::class,
+            TextMessageContent::class,
+            TextMessageEnd::class,
+            RunFinished::class,
+        ], $types);
+
+        self::assertSame('call-1', $events[1]->toolCallId);
+        self::assertSame('search', $events[1]->toolCallName);
+        self::assertSame('{"q":"hi"}', $events[2]->delta);
+        self::assertSame('call-1', $events[4]->toolCallId);
+        self::assertSame('hits', $events[4]->content);
+    }
+
+    public function testParallelToolCallsAreCorrelatedByFifo(): void
+    {
+        $llm = new FakeStreamingLlmClient();
+        $llm->queueScript([
+            new StreamEvent(StreamEvent::TOOL_USE_START, ['id' => 'call-1', 'name' => 'a']),
+            new StreamEvent(StreamEvent::TOOL_USE_DELTA, ['input' => '{"x":1}']),
+            new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
+            new StreamEvent(StreamEvent::TOOL_USE_START, ['id' => 'call-2', 'name' => 'b']),
+            new StreamEvent(StreamEvent::TOOL_USE_DELTA, ['input' => '{"y":2}']),
+            new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
+            new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => 'tool_use']),
+        ]);
+        $llm->queueScript([
+            new StreamEvent(StreamEvent::TEXT_DELTA, ['text' => 'ok']),
+            new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
+            new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => 'end_turn']),
+        ]);
+
+        $dispatcher = new FakeDispatcher();
+        $dispatcher->queueSuccess('a', 'A');
+        $dispatcher->queueSuccess('b', 'B');
+
+        [$events] = $this->runPipeline($llm, $dispatcher, [$this->tool('a'), $this->tool('b')], 'go');
+
+        // Walk forward picking just the tool events.
+        $toolEvents = array_values(array_filter(
+            $events,
+            static fn ($e) => $e instanceof ToolCallStart || $e instanceof ToolCallArgs
+                || $e instanceof ToolCallEnd || $e instanceof ToolCallResult,
+        ));
+
+        self::assertInstanceOf(ToolCallStart::class, $toolEvents[0]);
+        self::assertSame('call-1', $toolEvents[0]->toolCallId);
+        self::assertInstanceOf(ToolCallStart::class, $toolEvents[1]);
+        self::assertSame('call-2', $toolEvents[1]->toolCallId);
+
+        // First tool_result is FIFO call-1.
+        self::assertInstanceOf(ToolCallArgs::class, $toolEvents[2]);
+        self::assertSame('call-1', $toolEvents[2]->toolCallId);
+        self::assertInstanceOf(ToolCallEnd::class, $toolEvents[3]);
+        self::assertInstanceOf(ToolCallResult::class, $toolEvents[4]);
+        self::assertSame('call-1', $toolEvents[4]->toolCallId);
+        self::assertSame('A', $toolEvents[4]->content);
+
+        self::assertInstanceOf(ToolCallArgs::class, $toolEvents[5]);
+        self::assertSame('call-2', $toolEvents[5]->toolCallId);
+        self::assertInstanceOf(ToolCallResult::class, $toolEvents[7]);
+        self::assertSame('B', $toolEvents[7]->content);
+    }
+
+    public function testConfirmationRequiredEmitsInterruptOutcomeAndStopsRun(): void
+    {
+        $llm = new FakeStreamingLlmClient();
+        $llm->queueScript([
+            new StreamEvent(StreamEvent::TOOL_USE_START, ['id' => 'call-1', 'name' => 'writer']),
+            new StreamEvent(StreamEvent::TOOL_USE_DELTA, ['input' => '{"path":"/x"}']),
+            new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
+            new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => 'tool_use']),
+        ]);
+        // A second script would normally be queued for the post-confirmation
+        // iteration; we deliberately leave it empty to assert the run stops here.
+
+        $dispatcher = new FakeDispatcher();
+        // Dispatcher must NOT be called for a confirmation-pending tool.
+
+        [$events] = $this->runPipeline(
+            $llm,
+            $dispatcher,
+            [$this->tool('writer', confirm: true)],
+            'do it',
+        );
+
+        $finished = end($events);
+        self::assertInstanceOf(RunFinished::class, $finished);
+        $decoded = json_decode(json_encode($finished, JSON_THROW_ON_ERROR), true);
+        self::assertSame('interrupt', $decoded['outcome']['type']);
+        self::assertSame('tool_confirmation', $decoded['outcome']['interrupts'][0]['reason']);
+        self::assertSame('call-1', $decoded['outcome']['interrupts'][0]['toolCallId']);
+        self::assertCount(0, $dispatcher->calls);
+    }
+
+    public function testDispatcherThrowableSurfacesAsRunError(): void
+    {
+        $llm = new FakeStreamingLlmClient();
+        $llm->queueScript([
+            new StreamEvent(StreamEvent::TOOL_USE_START, ['id' => 'call-1', 'name' => 'search']),
+            new StreamEvent(StreamEvent::TOOL_USE_DELTA, ['input' => '{}']),
+            new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
+            new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => 'tool_use']),
+        ]);
+        // After the dispatch error, StreamingAgent feeds the error back to the
+        // LLM and continues — script a final iteration that ends the turn.
+        $llm->queueScript([
+            new StreamEvent(StreamEvent::TEXT_DELTA, ['text' => 'recovered']),
+            new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
+            new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => 'end_turn']),
+        ]);
+
+        $dispatcher = new FakeDispatcher();
+        $dispatcher->queueThrow('search', new \RuntimeException('disk full'));
+
+        [$events] = $this->runPipeline($llm, $dispatcher, [$this->tool('search')], 'hi');
+        $toolResult = $this->firstOf($events, ToolCallResult::class);
+        self::assertNotNull($toolResult);
+        self::assertStringContainsString('RuntimeException', $toolResult->content);
+        self::assertStringContainsString('disk full', $toolResult->content);
+        self::assertInstanceOf(RunFinished::class, end($events));
+    }
+
+    public function testYieldAndWriteInterleaveOneByOne(): void
+    {
+        // T6-4 latency probe: each AgUiEvent should be produced one at a time,
+        // not folded into a list and emitted at the end. We verify this by
+        // counting how many StreamEvents were consumed at the moment each
+        // adapter output is observed.
+        $consumed = 0;
+
+        $llm = new class ($consumed) implements \BEAR\ToolUse\Llm\StreamingLlmClientInterface {
+            public function __construct(private int &$consumed)
+            {
+            }
+
+            #[\Override]
+            public function chatStream(string $system, array $messages, array $tools): \Generator
+            {
+                $events = [
+                    new StreamEvent(StreamEvent::TEXT_DELTA, ['text' => 'a']),
+                    new StreamEvent(StreamEvent::TEXT_DELTA, ['text' => 'b']),
+                    new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
+                    new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => 'end_turn']),
+                ];
+                foreach ($events as $e) {
+                    $this->consumed++;
+                    yield $e;
+                }
+            }
+        };
+
+        $registry = new ToolCallRegistry();
+        $agent = new StreamingAgent(
+            new RecordingStreamingLlmClient($llm, $registry),
+            new RecordingDispatcher(new FakeDispatcher(), $registry),
+            tools: [],
+            systemPrompt: '',
+        );
+        $adapter = new AgUiAdapter('t', 'r', $registry);
+
+        $deltas = 0;
+        foreach ($adapter->run($agent->runStream('hi')) as $event) {
+            if ($event instanceof TextMessageContent) {
+                $deltas++;
+                if ($deltas === 1) {
+                    // After the first delta is emitted to us, only the first
+                    // upstream chunk should have been consumed (plus its prior
+                    // events). Not all four scripted StreamEvents.
+                    self::assertLessThan(4, $consumed, 'pipeline folded the stream');
+                }
+            }
+        }
+
+        self::assertSame(2, $deltas);
+    }
+
+    /**
+     * @param list<Tool>            $tools
+     *
+     * @return array{0:list<AgUiEventInterface>}
+     */
+    private function runPipeline(FakeStreamingLlmClient $llm, FakeDispatcher $dispatcher, array $tools, string $userMessage): array
+    {
+        $registry = new ToolCallRegistry();
+        $agent = new StreamingAgent(
+            new RecordingStreamingLlmClient($llm, $registry),
+            new RecordingDispatcher($dispatcher, $registry),
+            tools: $tools,
+            systemPrompt: '',
+        );
+        $adapter = new AgUiAdapter('t', 'r', $registry);
+
+        $events = [];
+        foreach ($adapter->run($agent->runStream($userMessage)) as $event) {
+            $events[] = $event;
+        }
+
+        return [$events];
+    }
+
+    private function tool(string $name, bool $confirm = false): Tool
+    {
+        return new Tool($name, '', ['type' => 'object', 'properties' => [], 'required' => []], $confirm);
+    }
+
+    /**
+     * @param list<AgUiEventInterface> $events
+     *
+     * @return list<class-string>
+     */
+    private function types(array $events): array
+    {
+        return array_map(static fn ($event) => $event::class, $events);
+    }
+
+    /**
+     * @param list<AgUiEventInterface> $events
+     * @param class-string             $class
+     */
+    private function firstOf(array $events, string $class): AgUiEventInterface|null
+    {
+        foreach ($events as $event) {
+            if ($event instanceof $class) {
+                return $event;
+            }
+        }
+
+        return null;
+    }
+}

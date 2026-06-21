@@ -50,7 +50,7 @@ final class RecordingDispatcherTest extends TestCase
         self::assertSame('boom', $outcome->content);
     }
 
-    public function testThrowsArePropagatedWithoutRecording(): void
+    public function testThrowsArePropagatedAfterRecordingErrorOutcome(): void
     {
         $inner = new FakeDispatcher();
         $inner->queueThrow('search', new RuntimeException('nope'));
@@ -61,7 +61,10 @@ final class RecordingDispatcherTest extends TestCase
         try {
             $dispatcher->dispatch(new ToolCall('call-1', 'search', []));
         } finally {
-            self::assertNull($registry->resultFor('call-1'));
+            $outcome = $registry->resultFor('call-1');
+            self::assertNotNull($outcome);
+            self::assertTrue($outcome->isError);
+            self::assertSame('RuntimeException: nope', $outcome->content);
         }
     }
 }
