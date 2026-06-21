@@ -26,10 +26,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "NaokiTsuchiya\\BEARAgUi\\": [
-                "tests",
-                "tests/Fake"
-            ]
+            "NaokiTsuchiya\\BEARAgUi\\Tests\\": "tests/"
         }
     },
     "scripts": {
