@@ -50,6 +50,7 @@
             "@format:check",
             "@lint",
             "@analyze",
+            "@guard",
             "@phpmd"
         ],
         "tests": [
