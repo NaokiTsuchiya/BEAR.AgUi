@@ -21,8 +21,7 @@ final class SseResponder
     public function __construct(
         private readonly SseEncoder $encoder,
         private readonly SseSinkInterface $sink,
-    ) {
-    }
+    ) {}
 
     /** @param iterable<AgUiEventInterface> $events */
     public function respond(iterable $events, int $statusCode = 200): void

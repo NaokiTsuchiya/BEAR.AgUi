@@ -21,14 +21,13 @@ final readonly class Interrupt implements JsonSerializable
     public function __construct(
         public string $id,
         public string $reason,
-        public string|null $message = null,
-        public string|null $toolCallId = null,
-        public array|null $responseSchema = null,
-        public string|null $expiresAt = null,
+        public ?string $message = null,
+        public ?string $toolCallId = null,
+        public ?array $responseSchema = null,
+        public ?string $expiresAt = null,
         /** @var array<string, mixed>|null */
-        public array|null $metadata = null,
-    ) {
-    }
+        public ?array $metadata = null,
+    ) {}
 
     /** @return array<string, mixed> */
     #[Override]

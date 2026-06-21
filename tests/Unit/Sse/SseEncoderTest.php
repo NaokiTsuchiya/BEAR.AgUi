@@ -19,10 +19,7 @@ final class SseEncoderTest extends TestCase
 
         $frame = $encoder->encode(new RunStarted('t-1', 'r-1'));
 
-        self::assertSame(
-            "data: {\"type\":\"RUN_STARTED\",\"threadId\":\"t-1\",\"runId\":\"r-1\"}\n\n",
-            $frame,
-        );
+        static::assertSame("data: {\"type\":\"RUN_STARTED\",\"threadId\":\"t-1\",\"runId\":\"r-1\"}\n\n", $frame);
     }
 
     public function testKeepsUtfAndSlashesUnescaped(): void
@@ -31,7 +28,7 @@ final class SseEncoderTest extends TestCase
 
         $frame = $encoder->encode(new TextMessageContent('m-1', 'こんにちは / hi'));
 
-        self::assertSame(
+        static::assertSame(
             "data: {\"type\":\"TEXT_MESSAGE_CONTENT\",\"messageId\":\"m-1\",\"delta\":\"こんにちは / hi\"}\n\n",
             $frame,
         );

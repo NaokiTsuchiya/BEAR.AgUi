@@ -38,7 +38,7 @@
         "lint": "mago lint",
         "format": "mago format",
         "format:check": "mago format --check",
-        "analyze": "mago analyze",
+        "analyze": "mago analyze src/",
         "guard": "mago guard",
         "crc": "composer-require-checker check ./composer.json",
         "metrics": "phpmetrics --report-html=build/metrics --exclude=Exception src",

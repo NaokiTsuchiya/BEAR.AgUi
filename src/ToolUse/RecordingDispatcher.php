@@ -28,8 +28,7 @@ final readonly class RecordingDispatcher implements DispatcherInterface
     public function __construct(
         private DispatcherInterface $inner,
         private ToolCallRecorder $recorder,
-    ) {
-    }
+    ) {}
 
     /**
      * @throws Throwable propagated from the wrapped dispatcher; the calling
@@ -46,10 +45,10 @@ final readonly class RecordingDispatcher implements DispatcherInterface
         try {
             $result = $this->inner->dispatch($toolCall);
         } catch (Throwable $error) {
-            $this->recorder->recordResult(
-                $toolCall,
-                ToolResult::error($toolCall->id, $error::class . ': ' . $error->getMessage()),
-            );
+            $this->recorder->recordResult($toolCall, ToolResult::error(
+                $toolCall->id,
+                $error::class . ': ' . $error->getMessage(),
+            ));
 
             throw $error;
         }

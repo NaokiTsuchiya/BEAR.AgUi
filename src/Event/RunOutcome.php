@@ -18,15 +18,14 @@ use Override;
  */
 final readonly class RunOutcome implements JsonSerializable
 {
-    private const string TYPE_SUCCESS = 'success';
-    private const string TYPE_INTERRUPT = 'interrupt';
+    private const TYPE_SUCCESS = 'success';
+    private const TYPE_INTERRUPT = 'interrupt';
 
     /** @param list<Interrupt> $interrupts */
     private function __construct(
         public string $type,
         public array $interrupts = [],
-    ) {
-    }
+    ) {}
 
     public static function success(): self
     {

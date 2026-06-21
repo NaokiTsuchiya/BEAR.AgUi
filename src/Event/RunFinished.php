@@ -20,8 +20,7 @@ final readonly class RunFinished implements AgUiEventInterface
         public string $threadId,
         public string $runId,
         public RunOutcome $outcome,
-    ) {
-    }
+    ) {}
 
     public static function success(string $threadId, string $runId): self
     {

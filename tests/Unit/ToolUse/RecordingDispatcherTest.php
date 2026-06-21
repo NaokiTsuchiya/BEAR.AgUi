@@ -24,14 +24,14 @@ final class RecordingDispatcherTest extends TestCase
 
         $result = $dispatcher->dispatch(new ToolCall('call-1', 'search', ['q' => 'hi']));
 
-        self::assertSame('hits', $result->content);
-        self::assertCount(1, $inner->calls);
+        static::assertSame('hits', $result->content);
+        static::assertCount(1, $inner->calls);
 
         $outcome = $registry->resultFor('call-1');
-        self::assertNotNull($outcome);
-        self::assertSame('hits', $outcome->content);
-        self::assertSame('{"q":"hi"}', $outcome->input);
-        self::assertFalse($outcome->isError);
+        static::assertNotNull($outcome);
+        static::assertSame('hits', $outcome->content);
+        static::assertSame('{"q":"hi"}', $outcome->input);
+        static::assertFalse($outcome->isError);
     }
 
     public function testDispatchRecordsErrorResult(): void
@@ -43,11 +43,11 @@ final class RecordingDispatcherTest extends TestCase
 
         $result = $dispatcher->dispatch(new ToolCall('call-1', 'search', []));
 
-        self::assertTrue($result->isError);
+        static::assertTrue($result->isError);
         $outcome = $registry->resultFor('call-1');
-        self::assertNotNull($outcome);
-        self::assertTrue($outcome->isError);
-        self::assertSame('boom', $outcome->content);
+        static::assertNotNull($outcome);
+        static::assertTrue($outcome->isError);
+        static::assertSame('boom', $outcome->content);
     }
 
     public function testThrowsArePropagatedAfterRecordingErrorOutcome(): void
@@ -62,9 +62,9 @@ final class RecordingDispatcherTest extends TestCase
             $dispatcher->dispatch(new ToolCall('call-1', 'search', []));
         } finally {
             $outcome = $registry->resultFor('call-1');
-            self::assertNotNull($outcome);
-            self::assertTrue($outcome->isError);
-            self::assertSame('RuntimeException: nope', $outcome->content);
+            static::assertNotNull($outcome);
+            static::assertTrue($outcome->isError);
+            static::assertSame('RuntimeException: nope', $outcome->content);
         }
     }
 }

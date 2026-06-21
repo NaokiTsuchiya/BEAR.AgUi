@@ -16,8 +16,7 @@ final readonly class RunStarted implements AgUiEventInterface
     public function __construct(
         public string $threadId,
         public string $runId,
-    ) {
-    }
+    ) {}
 
     #[Override]
     public function type(): string

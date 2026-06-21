@@ -9,7 +9,6 @@ use BEAR\ToolUse\Runtime\StreamingAgent;
 use BEAR\ToolUse\Schema\Tool;
 use NaokiTsuchiya\BEARAgUi\Adapter\AgUiAdapter;
 use NaokiTsuchiya\BEARAgUi\Event\AgUiEventInterface;
-use NaokiTsuchiya\BEARAgUi\Event\RunError;
 use NaokiTsuchiya\BEARAgUi\Event\RunFinished;
 use NaokiTsuchiya\BEARAgUi\Event\RunStarted;
 use NaokiTsuchiya\BEARAgUi\Event\TextMessageContent;
@@ -50,16 +49,19 @@ final class StreamingAgentContractTest extends TestCase
         [$events] = $this->runPipeline($llm, new FakeDispatcher(), [], 'hi');
         $types = $this->types($events);
 
-        self::assertSame([
-            RunStarted::class,
-            TextMessageStart::class,
-            TextMessageContent::class,
-            TextMessageContent::class,
-            TextMessageEnd::class,
-            RunFinished::class,
-        ], $types);
-        self::assertSame('hello ', $events[2]->delta);
-        self::assertSame('world', $events[3]->delta);
+        static::assertSame(
+            [
+                RunStarted::class,
+                TextMessageStart::class,
+                TextMessageContent::class,
+                TextMessageContent::class,
+                TextMessageEnd::class,
+                RunFinished::class,
+            ],
+            $types,
+        );
+        static::assertSame('hello ', $events[2]->delta);
+        static::assertSame('world', $events[3]->delta);
     }
 
     public function testSingleToolCallRoundTripUsesRealRegistryData(): void
@@ -85,23 +87,26 @@ final class StreamingAgentContractTest extends TestCase
         [$events] = $this->runPipeline($llm, $dispatcher, [$this->tool('search')], 'hi');
         $types = $this->types($events);
 
-        self::assertSame([
-            RunStarted::class,
-            ToolCallStart::class,
-            ToolCallArgs::class,
-            ToolCallEnd::class,
-            ToolCallResult::class,
-            TextMessageStart::class,
-            TextMessageContent::class,
-            TextMessageEnd::class,
-            RunFinished::class,
-        ], $types);
+        static::assertSame(
+            [
+                RunStarted::class,
+                ToolCallStart::class,
+                ToolCallArgs::class,
+                ToolCallEnd::class,
+                ToolCallResult::class,
+                TextMessageStart::class,
+                TextMessageContent::class,
+                TextMessageEnd::class,
+                RunFinished::class,
+            ],
+            $types,
+        );
 
-        self::assertSame('call-1', $events[1]->toolCallId);
-        self::assertSame('search', $events[1]->toolCallName);
-        self::assertSame('{"q":"hi"}', $events[2]->delta);
-        self::assertSame('call-1', $events[4]->toolCallId);
-        self::assertSame('hits', $events[4]->content);
+        static::assertSame('call-1', $events[1]->toolCallId);
+        static::assertSame('search', $events[1]->toolCallName);
+        static::assertSame('{"q":"hi"}', $events[2]->delta);
+        static::assertSame('call-1', $events[4]->toolCallId);
+        static::assertSame('hits', $events[4]->content);
     }
 
     public function testParallelToolCallsAreCorrelatedByFifo(): void
@@ -131,27 +136,31 @@ final class StreamingAgentContractTest extends TestCase
         // Walk forward picking just the tool events.
         $toolEvents = array_values(array_filter(
             $events,
-            static fn ($e) => $e instanceof ToolCallStart || $e instanceof ToolCallArgs
-                || $e instanceof ToolCallEnd || $e instanceof ToolCallResult,
+            static fn($e) => (
+                $e instanceof ToolCallStart
+                || $e instanceof ToolCallArgs
+                || $e instanceof ToolCallEnd
+                || $e instanceof ToolCallResult
+            ),
         ));
 
-        self::assertInstanceOf(ToolCallStart::class, $toolEvents[0]);
-        self::assertSame('call-1', $toolEvents[0]->toolCallId);
-        self::assertInstanceOf(ToolCallStart::class, $toolEvents[1]);
-        self::assertSame('call-2', $toolEvents[1]->toolCallId);
+        static::assertInstanceOf(ToolCallStart::class, $toolEvents[0]);
+        static::assertSame('call-1', $toolEvents[0]->toolCallId);
+        static::assertInstanceOf(ToolCallStart::class, $toolEvents[1]);
+        static::assertSame('call-2', $toolEvents[1]->toolCallId);
 
         // First tool_result is FIFO call-1.
-        self::assertInstanceOf(ToolCallArgs::class, $toolEvents[2]);
-        self::assertSame('call-1', $toolEvents[2]->toolCallId);
-        self::assertInstanceOf(ToolCallEnd::class, $toolEvents[3]);
-        self::assertInstanceOf(ToolCallResult::class, $toolEvents[4]);
-        self::assertSame('call-1', $toolEvents[4]->toolCallId);
-        self::assertSame('A', $toolEvents[4]->content);
+        static::assertInstanceOf(ToolCallArgs::class, $toolEvents[2]);
+        static::assertSame('call-1', $toolEvents[2]->toolCallId);
+        static::assertInstanceOf(ToolCallEnd::class, $toolEvents[3]);
+        static::assertInstanceOf(ToolCallResult::class, $toolEvents[4]);
+        static::assertSame('call-1', $toolEvents[4]->toolCallId);
+        static::assertSame('A', $toolEvents[4]->content);
 
-        self::assertInstanceOf(ToolCallArgs::class, $toolEvents[5]);
-        self::assertSame('call-2', $toolEvents[5]->toolCallId);
-        self::assertInstanceOf(ToolCallResult::class, $toolEvents[7]);
-        self::assertSame('B', $toolEvents[7]->content);
+        static::assertInstanceOf(ToolCallArgs::class, $toolEvents[5]);
+        static::assertSame('call-2', $toolEvents[5]->toolCallId);
+        static::assertInstanceOf(ToolCallResult::class, $toolEvents[7]);
+        static::assertSame('B', $toolEvents[7]->content);
     }
 
     public function testConfirmationRequiredEmitsInterruptOutcomeAndStopsRun(): void
@@ -169,20 +178,15 @@ final class StreamingAgentContractTest extends TestCase
         $dispatcher = new FakeDispatcher();
         // Dispatcher must NOT be called for a confirmation-pending tool.
 
-        [$events] = $this->runPipeline(
-            $llm,
-            $dispatcher,
-            [$this->tool('writer', confirm: true)],
-            'do it',
-        );
+        [$events] = $this->runPipeline($llm, $dispatcher, [$this->tool('writer', confirm: true)], 'do it');
 
         $finished = end($events);
-        self::assertInstanceOf(RunFinished::class, $finished);
+        static::assertInstanceOf(RunFinished::class, $finished);
         $decoded = json_decode(json_encode($finished, JSON_THROW_ON_ERROR), true);
-        self::assertSame('interrupt', $decoded['outcome']['type']);
-        self::assertSame('tool_confirmation', $decoded['outcome']['interrupts'][0]['reason']);
-        self::assertSame('call-1', $decoded['outcome']['interrupts'][0]['toolCallId']);
-        self::assertCount(0, $dispatcher->calls);
+        static::assertSame('interrupt', $decoded['outcome']['type']);
+        static::assertSame('tool_confirmation', $decoded['outcome']['interrupts'][0]['reason']);
+        static::assertSame('call-1', $decoded['outcome']['interrupts'][0]['toolCallId']);
+        static::assertCount(0, $dispatcher->calls);
     }
 
     public function testDispatcherThrowableSurfacesAsRunError(): void
@@ -207,10 +211,10 @@ final class StreamingAgentContractTest extends TestCase
 
         [$events] = $this->runPipeline($llm, $dispatcher, [$this->tool('search')], 'hi');
         $toolResult = $this->firstOf($events, ToolCallResult::class);
-        self::assertNotNull($toolResult);
-        self::assertStringContainsString('RuntimeException', $toolResult->content);
-        self::assertStringContainsString('disk full', $toolResult->content);
-        self::assertInstanceOf(RunFinished::class, end($events));
+        static::assertNotNull($toolResult);
+        static::assertStringContainsString('RuntimeException', $toolResult->content);
+        static::assertStringContainsString('disk full', $toolResult->content);
+        static::assertInstanceOf(RunFinished::class, end($events));
     }
 
     public function testYieldAndWriteInterleaveOneByOne(): void
@@ -221,10 +225,10 @@ final class StreamingAgentContractTest extends TestCase
         // adapter output is observed.
         $consumed = 0;
 
-        $llm = new class ($consumed) implements \BEAR\ToolUse\Llm\StreamingLlmClientInterface {
-            public function __construct(private int &$consumed)
-            {
-            }
+        $llm = new class($consumed) implements \BEAR\ToolUse\Llm\StreamingLlmClientInterface {
+            public function __construct(
+                private int &$consumed,
+            ) {}
 
             #[\Override]
             public function chatStream(string $system, array $messages, array $tools): \Generator
@@ -253,18 +257,20 @@ final class StreamingAgentContractTest extends TestCase
 
         $deltas = 0;
         foreach ($adapter->run($agent->runStream('hi')) as $event) {
-            if ($event instanceof TextMessageContent) {
-                $deltas++;
-                if ($deltas === 1) {
-                    // After the first delta is emitted to us, only the first
-                    // upstream chunk should have been consumed (plus its prior
-                    // events). Not all four scripted StreamEvents.
-                    self::assertLessThan(4, $consumed, 'pipeline folded the stream');
-                }
+            if (!$event instanceof TextMessageContent) {
+                continue;
+            }
+
+            $deltas++;
+            if ($deltas === 1) {
+                // After the first delta is emitted to us, only the first
+                // upstream chunk should have been consumed (plus its prior
+                // events). Not all four scripted StreamEvents.
+                static::assertLessThan(4, $consumed, 'pipeline folded the stream');
             }
         }
 
-        self::assertSame(2, $deltas);
+        static::assertSame(2, $deltas);
     }
 
     /**
@@ -272,8 +278,12 @@ final class StreamingAgentContractTest extends TestCase
      *
      * @return array{0:list<AgUiEventInterface>}
      */
-    private function runPipeline(FakeStreamingLlmClient $llm, FakeDispatcher $dispatcher, array $tools, string $userMessage): array
-    {
+    private function runPipeline(
+        FakeStreamingLlmClient $llm,
+        FakeDispatcher $dispatcher,
+        array $tools,
+        string $userMessage,
+    ): array {
         $registry = new ToolCallRegistry();
         $agent = new StreamingAgent(
             new RecordingStreamingLlmClient($llm, $registry),
@@ -303,14 +313,14 @@ final class StreamingAgentContractTest extends TestCase
      */
     private function types(array $events): array
     {
-        return array_map(static fn ($event) => $event::class, $events);
+        return array_map(static fn($event) => $event::class, $events);
     }
 
     /**
      * @param list<AgUiEventInterface> $events
      * @param class-string             $class
      */
-    private function firstOf(array $events, string $class): AgUiEventInterface|null
+    private function firstOf(array $events, string $class): ?AgUiEventInterface
     {
         foreach ($events as $event) {
             if ($event instanceof $class) {

@@ -16,8 +16,7 @@ final readonly class ToolCallArgs implements AgUiEventInterface
     public function __construct(
         public string $toolCallId,
         public string $delta,
-    ) {
-    }
+    ) {}
 
     #[Override]
     public function type(): string

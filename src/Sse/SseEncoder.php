@@ -28,10 +28,7 @@ final class SseEncoder
 {
     public function encode(AgUiEventInterface $event): string
     {
-        $json = json_encode(
-            $event,
-            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-        );
+        $json = json_encode($event, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         return 'data: ' . $json . "\n\n";
     }

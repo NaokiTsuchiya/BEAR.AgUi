@@ -32,8 +32,7 @@ final readonly class RecordingStreamingLlmClient implements StreamingLlmClientIn
     public function __construct(
         private StreamingLlmClientInterface $inner,
         private ToolCallRecorder $recorder,
-    ) {
-    }
+    ) {}
 
     /**
      * @param list<Message> $messages

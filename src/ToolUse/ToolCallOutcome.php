@@ -20,6 +20,5 @@ final readonly class ToolCallOutcome
         public string $input,
         public string $content,
         public bool $isError,
-    ) {
-    }
+    ) {}
 }

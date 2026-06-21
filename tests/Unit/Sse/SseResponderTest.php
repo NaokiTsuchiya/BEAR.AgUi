@@ -29,12 +29,12 @@ final class SseResponderTest extends TestCase
 
         $responder->respond($events);
 
-        self::assertSame([200], $sink->opens);
-        self::assertSame(1, $sink->closes);
-        self::assertCount(2, $sink->frames);
-        self::assertStringStartsWith('data: {"type":"RUN_STARTED"', $sink->frames[0]);
-        self::assertStringEndsWith("\n\n", $sink->frames[0]);
-        self::assertStringStartsWith('data: {"type":"TEXT_MESSAGE_CONTENT"', $sink->frames[1]);
+        static::assertSame([200], $sink->opens);
+        static::assertSame(1, $sink->closes);
+        static::assertCount(2, $sink->frames);
+        static::assertStringStartsWith('data: {"type":"RUN_STARTED"', $sink->frames[0]);
+        static::assertStringEndsWith("\n\n", $sink->frames[0]);
+        static::assertStringStartsWith('data: {"type":"TEXT_MESSAGE_CONTENT"', $sink->frames[1]);
     }
 
     /**
@@ -57,10 +57,7 @@ final class SseResponderTest extends TestCase
 
         $responder->respond($events);
 
-        self::assertSame(
-            ['open', 'yield:a', 'write', 'yield:b', 'write', 'close'],
-            $log,
-        );
+        static::assertSame(['open', 'yield:a', 'write', 'yield:b', 'write', 'close'], $log);
     }
 }
 
@@ -94,9 +91,9 @@ final class RecordingSink implements SseSinkInterface
 final class LoggingSink implements SseSinkInterface
 {
     /** @param array<int, string> $log shared with the generator under test */
-    public function __construct(private array &$log)
-    {
-    }
+    public function __construct(
+        private array &$log,
+    ) {}
 
     #[Override]
     public function open(int $_statusCode): void

@@ -16,8 +16,7 @@ final readonly class TextMessageContent implements AgUiEventInterface
     public function __construct(
         public string $messageId,
         public string $delta,
-    ) {
-    }
+    ) {}
 
     #[Override]
     public function type(): string

@@ -47,51 +47,73 @@ final readonly class RunAgentInput
         public array $messages,
         public array $tools = [],
         public array $context = [],
-        public array|null $state = null,
+        public ?array $state = null,
         public array $forwardedProps = [],
         public array $resume = [],
-    ) {
-    }
+    ) {}
 
     /**
      * Build + validate from a raw JSON request body.
      *
      * @throws InvalidArgumentException on malformed input (→ HTTP 400 upstream).
+     * @throws \JsonException when the body is not valid JSON.
      */
     public static function fromJson(string $body): self
     {
         /** @var mixed $data */
         $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
-        if (! is_array($data)) {
+        if (!is_array($data)) {
             throw new InvalidArgumentException('RunAgentInput must be a JSON object.');
         }
 
         foreach (['threadId', 'runId'] as $required) {
-            if (
-                ! array_key_exists($required, $data)
-                || ! is_string($data[$required])
-                || $data[$required] === ''
-            ) {
+            if (!array_key_exists($required, $data) || !is_string($data[$required]) || $data[$required] === '') {
                 throw new InvalidArgumentException("Missing or invalid '{$required}'.");
             }
         }
 
-        if (! isset($data['messages']) || ! is_array($data['messages'])) {
+        if (!isset($data['messages']) || !is_array($data['messages'])) {
             throw new InvalidArgumentException("Missing or invalid 'messages'.");
         }
 
-        /** @var array<string, mixed> $data */
+        /** @var array<string, mixed>|null $state */
+        $state = is_array($data['state'] ?? null) ? $data['state'] : null;
+        /** @var array<string, mixed> $forwardedProps */
+        $forwardedProps = is_array($data['forwardedProps'] ?? null) ? $data['forwardedProps'] : [];
+
         return new self(
             threadId: (string) $data['threadId'],
             runId: (string) $data['runId'],
-            /** @var list<array<string, mixed>> */
-            messages: $data['messages'],
-            tools: is_array($data['tools'] ?? null) ? $data['tools'] : [],
-            context: is_array($data['context'] ?? null) ? $data['context'] : [],
-            state: is_array($data['state'] ?? null) ? $data['state'] : null,
-            forwardedProps: is_array($data['forwardedProps'] ?? null) ? $data['forwardedProps'] : [],
-            resume: is_array($data['resume'] ?? null) ? $data['resume'] : [],
+            messages: self::ensureListOfObjects($data['messages']),
+            tools: self::ensureListOfObjects($data['tools'] ?? []),
+            context: self::ensureListOfObjects($data['context'] ?? []),
+            state: $state,
+            forwardedProps: $forwardedProps,
+            resume: self::ensureListOfObjects($data['resume'] ?? []),
         );
+    }
+
+    /**
+     * Coerce an arbitrary value into a list of associative arrays. Non-array
+     * inputs become an empty list; non-array entries are dropped.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function ensureListOfObjects(mixed $value): array
+    {
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $list = [];
+        foreach ($value as $entry) {
+            if (is_array($entry)) {
+                /** @var array<string, mixed> $entry */
+                $list[] = $entry;
+            }
+        }
+
+        return $list;
     }
 
     /**
@@ -106,11 +128,7 @@ final readonly class RunAgentInput
     {
         for ($i = count($this->messages) - 1; $i >= 0; $i--) {
             $message = $this->messages[$i];
-            if (
-                ($message['role'] ?? null) === 'user'
-                && isset($message['content'])
-                && is_string($message['content'])
-            ) {
+            if (($message['role'] ?? null) === 'user' && isset($message['content']) && is_string($message['content'])) {
                 return $message['content'];
             }
         }
@@ -128,9 +146,11 @@ final readonly class RunAgentInput
     {
         $names = [];
         foreach ($this->tools as $tool) {
-            if (isset($tool['name']) && is_string($tool['name'])) {
-                $names[] = $tool['name'];
+            if (!(isset($tool['name']) && is_string($tool['name']))) {
+                continue;
             }
+
+            $names[] = $tool['name'];
         }
 
         return $names;

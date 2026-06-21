@@ -36,25 +36,28 @@ final class RecordingStreamingLlmClientTest extends TestCase
             $observed[] = $event->type;
         }
 
-        self::assertSame([
-            StreamEvent::TEXT_DELTA,
-            StreamEvent::TOOL_USE_START,
-            StreamEvent::TOOL_USE_DELTA,
-            StreamEvent::TOOL_USE_DELTA,
-            StreamEvent::CONTENT_BLOCK_STOP,
-            StreamEvent::MESSAGE_STOP,
-        ], $observed);
+        static::assertSame(
+            [
+                StreamEvent::TEXT_DELTA,
+                StreamEvent::TOOL_USE_START,
+                StreamEvent::TOOL_USE_DELTA,
+                StreamEvent::TOOL_USE_DELTA,
+                StreamEvent::CONTENT_BLOCK_STOP,
+                StreamEvent::MESSAGE_STOP,
+            ],
+            $observed,
+        );
 
         $started = $registry->nextStarted();
-        self::assertNotNull($started);
-        self::assertSame('call-1', $started->id);
-        self::assertSame('search', $started->name);
+        static::assertNotNull($started);
+        static::assertSame('call-1', $started->id);
+        static::assertSame('search', $started->name);
 
         // recordResult drives input fragment fall-through — exercise by recording a result.
         $registry->recordResult(new ToolCall('call-1', 'search', []), ToolResult::success('call-1', 'ok'));
         $outcome = $registry->resultFor('call-1');
-        self::assertNotNull($outcome);
-        self::assertSame('{"q":"hi"}', $outcome->input);
+        static::assertNotNull($outcome);
+        static::assertSame('{"q":"hi"}', $outcome->input);
     }
 
     public function testParallelToolUsesAreCorrelatedByContentBlockBoundary(): void
@@ -73,24 +76,24 @@ final class RecordingStreamingLlmClientTest extends TestCase
         $registry = new ToolCallRegistry();
         $client = new RecordingStreamingLlmClient($inner, $registry);
 
-        foreach ($client->chatStream('sys', [], []) as $_event) {
-            // drain
-        }
+        // Drain the chatStream generator so the decorator's side-effects
+        // (recordStart / appendInput) actually run against the registry.
+        iterator_to_array($client->chatStream('sys', [], []), false);
 
         $first = $registry->nextStarted();
         $second = $registry->nextStarted();
-        self::assertNotNull($first);
-        self::assertNotNull($second);
-        self::assertSame('call-1', $first->id);
-        self::assertSame('call-2', $second->id);
+        static::assertNotNull($first);
+        static::assertNotNull($second);
+        static::assertSame('call-1', $first->id);
+        static::assertSame('call-2', $second->id);
 
         $registry->recordResult(new ToolCall('call-1', 'a', []), ToolResult::success('call-1', ''));
         $registry->recordResult(new ToolCall('call-2', 'b', []), ToolResult::success('call-2', ''));
         $o1 = $registry->resultFor('call-1');
         $o2 = $registry->resultFor('call-2');
-        self::assertNotNull($o1);
-        self::assertNotNull($o2);
-        self::assertSame('{"x":1}', $o1->input);
-        self::assertSame('{"y":2}', $o2->input);
+        static::assertNotNull($o1);
+        static::assertNotNull($o2);
+        static::assertSame('{"x":1}', $o1->input);
+        static::assertSame('{"y":2}', $o2->input);
     }
 }

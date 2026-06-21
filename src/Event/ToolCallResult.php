@@ -19,8 +19,7 @@ final readonly class ToolCallResult implements AgUiEventInterface
         public string $toolCallId,
         public string $content,
         public string $role = 'tool',
-    ) {
-    }
+    ) {}
 
     #[Override]
     public function type(): string

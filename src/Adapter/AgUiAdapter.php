@@ -55,18 +55,23 @@ use function random_bytes;
  */
 final class AgUiAdapter
 {
-    private string|null $openMessageId = null;
+    private ?string $openMessageId = null;
 
     /** @var list<string> FIFO of tool-call ids awaiting a tool_result event. */
     private array $awaitingResult = [];
+
+    /** Monotonic counter used as the random-fallback id discriminator. */
+    private int $idCounter = 0;
+
+    /** Set true once an interrupt or in-stream error has yielded a terminal event. */
+    private bool $terminated = false;
 
     public function __construct(
         private readonly string $threadId,
         private readonly string $runId,
         private readonly ToolCallView $registry,
-        private readonly LoggerInterface|null $logger = null,
-    ) {
-    }
+        private readonly ?LoggerInterface $logger = null,
+    ) {}
 
     /**
      * @param Generator<int, AgentEvent, mixed, void> $agentStream
@@ -79,8 +84,8 @@ final class AgUiAdapter
 
         try {
             foreach ($agentStream as $event) {
-                $terminate = yield from $this->translate($event);
-                if ($terminate === true) {
+                yield from $this->translate($event);
+                if ($this->terminated) {
                     return;
                 }
             }
@@ -88,10 +93,10 @@ final class AgUiAdapter
             yield from $this->closeOpenMessage();
             yield RunFinished::success($this->threadId, $this->runId);
         } catch (Throwable $e) {
-            $this->logger?->error(
-                'AgUiAdapter caught throwable while consuming agent stream: {message}',
-                ['message' => $e->getMessage(), 'exception' => $e],
-            );
+            $this->logger?->error('AgUiAdapter caught throwable while consuming agent stream: {message}', [
+                'message' => $e->getMessage(),
+                'exception' => $e,
+            ]);
             yield from $this->closeOpenMessage();
             yield new RunError('Internal agent error.', 'AGENT_ERROR');
         }
@@ -99,35 +104,30 @@ final class AgUiAdapter
 
     /**
      * Translate a single AgentEvent, emitting any boundary events required.
-     * Returns true when the run is terminated by this event (interrupt / error)
-     * so the caller stops consuming further AgentEvents.
+     * Sets {@see self::$terminated} when the event itself ends the run
+     * (interrupt / error) so the caller stops consuming further AgentEvents.
      *
-     * @return Generator<int, AgUiEventInterface, mixed, bool>
+     * @return Generator<int, AgUiEventInterface, mixed, void>
      */
     private function translate(AgentEvent $event): Generator
     {
         switch ($event->type) {
             case AgentEvent::TEXT_DELTA:
-                $messageId = yield from $this->ensureOpenMessage();
-                yield new TextMessageContent($messageId, $this->dataString($event, 'text'));
+                yield from $this->ensureOpenMessage();
+                yield new TextMessageContent($this->requireOpenMessageId(), $this->dataString($event, 'text'));
 
-                return false;
+                return;
 
             case AgentEvent::TOOL_START:
                 yield from $this->closeOpenMessage();
                 $started = $this->registry->nextStarted();
-                if ($started !== null) {
-                    $id = $started->id;
-                    $name = $started->name;
-                } else {
-                    $id = $this->newId('tool');
-                    $name = $this->dataString($event, 'toolName');
-                }
+                $id = $started !== null ? $started->id : $this->newId('tool');
+                $name = $started !== null ? $started->name : $this->dataString($event, 'toolName');
 
                 $this->awaitingResult[] = $id;
                 yield new ToolCallStart($id, $name);
 
-                return false;
+                return;
 
             case AgentEvent::TOOL_RESULT:
                 $id = array_shift($this->awaitingResult) ?? $this->newId('tool');
@@ -142,7 +142,7 @@ final class AgUiAdapter
                 yield new ToolCallEnd($id);
                 yield new ToolCallResult($this->newId('msg'), $id, $content);
 
-                return false;
+                return;
 
             case AgentEvent::CONFIRMATION_REQUIRED:
                 yield from $this->closeOpenMessage();
@@ -153,39 +153,53 @@ final class AgUiAdapter
                     toolCallId: $this->dataString($event, 'toolId'),
                 );
                 yield RunFinished::interrupt($this->threadId, $this->runId, [$interrupt]);
+                $this->terminated = true;
 
-                return true;
+                return;
 
             case AgentEvent::ERROR:
                 yield from $this->closeOpenMessage();
-                $this->logger?->error(
-                    'AgUiAdapter received error AgentEvent: {message}',
-                    ['message' => $this->dataString($event, 'message')],
-                );
+                $this->logger?->error('AgUiAdapter received error AgentEvent: {message}', ['message' => $this->dataString(
+                    $event,
+                    'message',
+                )]);
                 yield new RunError('Internal agent error.', 'AGENT_ERROR');
+                $this->terminated = true;
 
-                return true;
+                return;
 
             case AgentEvent::COMPLETED:
                 yield from $this->closeOpenMessage();
 
-                return false;
+                return;
 
             default:
-                return false;
+                return;
         }
     }
 
     /**
      * Ensure a TEXT_MESSAGE block is open, emitting TEXT_MESSAGE_START if needed.
+     * Use {@see self::requireOpenMessageId()} afterwards to read the id.
      *
-     * @return Generator<int, AgUiEventInterface, mixed, string> the open message id
+     * @return Generator<int, AgUiEventInterface, mixed, void>
      */
     private function ensureOpenMessage(): Generator
     {
         if ($this->openMessageId === null) {
             $this->openMessageId = $this->newId('msg');
             yield new TextMessageStart($this->openMessageId);
+        }
+    }
+
+    /**
+     * @throws \LogicException when no message is open — callers must run
+     *                         {@see self::ensureOpenMessage()} first.
+     */
+    private function requireOpenMessageId(): string
+    {
+        if ($this->openMessageId === null) {
+            throw new \LogicException('No open message id; ensureOpenMessage() must run first.');
         }
 
         return $this->openMessageId;
@@ -200,9 +214,20 @@ final class AgUiAdapter
         }
     }
 
+    /**
+     * Cryptographic randomness is overkill for an SSE id; we wrap any
+     * RandomException as the AG-UI adapter cannot fail mid-stream — falling
+     * back to a counter-based id keeps the run streaming.
+     */
     private function newId(string $prefix): string
     {
-        return $prefix . '-' . bin2hex(random_bytes(6));
+        try {
+            return $prefix . '-' . bin2hex(random_bytes(6));
+        } catch (\Random\RandomException) {
+            $this->idCounter++;
+
+            return $prefix . '-fallback-' . $this->idCounter;
+        }
     }
 
     private function dataString(AgentEvent $event, string $key): string

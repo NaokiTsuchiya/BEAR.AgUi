@@ -10,7 +10,6 @@ use BEAR\ToolUse\Runtime\AgentEvent;
 use Generator;
 use NaokiTsuchiya\BEARAgUi\Adapter\AgUiAdapter;
 use NaokiTsuchiya\BEARAgUi\Event\AgUiEventInterface;
-use NaokiTsuchiya\BEARAgUi\Event\Interrupt;
 use NaokiTsuchiya\BEARAgUi\Event\RunError;
 use NaokiTsuchiya\BEARAgUi\Event\RunFinished;
 use NaokiTsuchiya\BEARAgUi\Event\RunStarted;
@@ -44,20 +43,20 @@ final class AgUiAdapterTest extends TestCase
             AgentEvent::completed('hi there'),
         ])));
 
-        self::assertInstanceOf(RunStarted::class, $events[0]);
-        self::assertInstanceOf(TextMessageStart::class, $events[1]);
-        self::assertInstanceOf(TextMessageContent::class, $events[2]);
-        self::assertInstanceOf(TextMessageContent::class, $events[3]);
-        self::assertInstanceOf(TextMessageEnd::class, $events[4]);
-        self::assertInstanceOf(RunFinished::class, $events[5]);
-        self::assertCount(6, $events);
+        static::assertInstanceOf(RunStarted::class, $events[0]);
+        static::assertInstanceOf(TextMessageStart::class, $events[1]);
+        static::assertInstanceOf(TextMessageContent::class, $events[2]);
+        static::assertInstanceOf(TextMessageContent::class, $events[3]);
+        static::assertInstanceOf(TextMessageEnd::class, $events[4]);
+        static::assertInstanceOf(RunFinished::class, $events[5]);
+        static::assertCount(6, $events);
 
         $messageId = $events[1]->messageId;
-        self::assertSame($messageId, $events[2]->messageId);
-        self::assertSame($messageId, $events[3]->messageId);
-        self::assertSame($messageId, $events[4]->messageId);
-        self::assertSame('hi', $events[2]->delta);
-        self::assertSame(' there', $events[3]->delta);
+        static::assertSame($messageId, $events[2]->messageId);
+        static::assertSame($messageId, $events[3]->messageId);
+        static::assertSame($messageId, $events[4]->messageId);
+        static::assertSame('hi', $events[2]->delta);
+        static::assertSame(' there', $events[3]->delta);
     }
 
     public function testSingleToolCallEmitsStartArgsEndResultWithRealRegistryData(): void
@@ -65,10 +64,7 @@ final class AgUiAdapterTest extends TestCase
         $registry = new ToolCallRegistry();
         $registry->recordStart('call-1', 'search');
         $registry->appendInput('call-1', '{"q":"hi"}');
-        $registry->recordResult(
-            new ToolCall('call-1', 'search', ['q' => 'hi']),
-            ToolResult::success('call-1', 'hits'),
-        );
+        $registry->recordResult(new ToolCall('call-1', 'search', ['q' => 'hi']), ToolResult::success('call-1', 'hits'));
 
         $adapter = new AgUiAdapter('t', 'r', $registry);
 
@@ -78,20 +74,20 @@ final class AgUiAdapterTest extends TestCase
             AgentEvent::completed(''),
         ])));
 
-        self::assertInstanceOf(RunStarted::class, $events[0]);
-        self::assertInstanceOf(ToolCallStart::class, $events[1]);
-        self::assertInstanceOf(ToolCallArgs::class, $events[2]);
-        self::assertInstanceOf(ToolCallEnd::class, $events[3]);
-        self::assertInstanceOf(ToolCallResult::class, $events[4]);
-        self::assertInstanceOf(RunFinished::class, $events[5]);
+        static::assertInstanceOf(RunStarted::class, $events[0]);
+        static::assertInstanceOf(ToolCallStart::class, $events[1]);
+        static::assertInstanceOf(ToolCallArgs::class, $events[2]);
+        static::assertInstanceOf(ToolCallEnd::class, $events[3]);
+        static::assertInstanceOf(ToolCallResult::class, $events[4]);
+        static::assertInstanceOf(RunFinished::class, $events[5]);
 
-        self::assertSame('call-1', $events[1]->toolCallId);
-        self::assertSame('search', $events[1]->toolCallName);
-        self::assertSame('call-1', $events[2]->toolCallId);
-        self::assertSame('{"q":"hi"}', $events[2]->delta);
-        self::assertSame('call-1', $events[3]->toolCallId);
-        self::assertSame('call-1', $events[4]->toolCallId);
-        self::assertSame('hits', $events[4]->content);
+        static::assertSame('call-1', $events[1]->toolCallId);
+        static::assertSame('search', $events[1]->toolCallName);
+        static::assertSame('call-1', $events[2]->toolCallId);
+        static::assertSame('{"q":"hi"}', $events[2]->delta);
+        static::assertSame('call-1', $events[3]->toolCallId);
+        static::assertSame('call-1', $events[4]->toolCallId);
+        static::assertSame('hits', $events[4]->content);
     }
 
     public function testParallelToolsAreCorrelatedInFifoOrderFromRegistry(): void
@@ -115,30 +111,30 @@ final class AgUiAdapterTest extends TestCase
         ])));
 
         // Lifecycle: RunStarted, 2× ToolCallStart, 2× (Args, End, Result), RunFinished
-        self::assertInstanceOf(RunStarted::class, $events[0]);
-        self::assertInstanceOf(ToolCallStart::class, $events[1]);
-        self::assertInstanceOf(ToolCallStart::class, $events[2]);
-        self::assertSame('call-1', $events[1]->toolCallId);
-        self::assertSame('call-2', $events[2]->toolCallId);
+        static::assertInstanceOf(RunStarted::class, $events[0]);
+        static::assertInstanceOf(ToolCallStart::class, $events[1]);
+        static::assertInstanceOf(ToolCallStart::class, $events[2]);
+        static::assertSame('call-1', $events[1]->toolCallId);
+        static::assertSame('call-2', $events[2]->toolCallId);
 
         // First tool_result resolves call-1 (FIFO).
-        self::assertInstanceOf(ToolCallArgs::class, $events[3]);
-        self::assertSame('call-1', $events[3]->toolCallId);
-        self::assertInstanceOf(ToolCallEnd::class, $events[4]);
-        self::assertSame('call-1', $events[4]->toolCallId);
-        self::assertInstanceOf(ToolCallResult::class, $events[5]);
-        self::assertSame('call-1', $events[5]->toolCallId);
-        self::assertSame('A', $events[5]->content);
+        static::assertInstanceOf(ToolCallArgs::class, $events[3]);
+        static::assertSame('call-1', $events[3]->toolCallId);
+        static::assertInstanceOf(ToolCallEnd::class, $events[4]);
+        static::assertSame('call-1', $events[4]->toolCallId);
+        static::assertInstanceOf(ToolCallResult::class, $events[5]);
+        static::assertSame('call-1', $events[5]->toolCallId);
+        static::assertSame('A', $events[5]->content);
 
         // Second tool_result resolves call-2.
-        self::assertInstanceOf(ToolCallArgs::class, $events[6]);
-        self::assertSame('call-2', $events[6]->toolCallId);
-        self::assertInstanceOf(ToolCallEnd::class, $events[7]);
-        self::assertInstanceOf(ToolCallResult::class, $events[8]);
-        self::assertSame('B', $events[8]->content);
-        self::assertSame('call-2', $events[8]->toolCallId);
+        static::assertInstanceOf(ToolCallArgs::class, $events[6]);
+        static::assertSame('call-2', $events[6]->toolCallId);
+        static::assertInstanceOf(ToolCallEnd::class, $events[7]);
+        static::assertInstanceOf(ToolCallResult::class, $events[8]);
+        static::assertSame('B', $events[8]->content);
+        static::assertSame('call-2', $events[8]->toolCallId);
 
-        self::assertInstanceOf(RunFinished::class, $events[9]);
+        static::assertInstanceOf(RunFinished::class, $events[9]);
     }
 
     public function testToolResultWithoutRegistryFallsBackToEmptyContent(): void
@@ -155,13 +151,13 @@ final class AgUiAdapterTest extends TestCase
             AgentEvent::completed(''),
         ])));
 
-        self::assertInstanceOf(ToolCallEnd::class, $events[2]);
-        self::assertSame('call-1', $events[2]->toolCallId);
-        self::assertInstanceOf(ToolCallResult::class, $events[3]);
-        self::assertSame('call-1', $events[3]->toolCallId);
-        self::assertSame('', $events[3]->content);
+        static::assertInstanceOf(ToolCallEnd::class, $events[2]);
+        static::assertSame('call-1', $events[2]->toolCallId);
+        static::assertInstanceOf(ToolCallResult::class, $events[3]);
+        static::assertSame('call-1', $events[3]->toolCallId);
+        static::assertSame('', $events[3]->content);
         // No ToolCallArgs is emitted when input is empty.
-        self::assertInstanceOf(RunFinished::class, $events[4]);
+        static::assertInstanceOf(RunFinished::class, $events[4]);
     }
 
     public function testToolStartClosesOpenTextMessage(): void
@@ -179,10 +175,10 @@ final class AgUiAdapterTest extends TestCase
             AgentEvent::completed(''),
         ])));
 
-        self::assertInstanceOf(TextMessageStart::class, $events[1]);
-        self::assertInstanceOf(TextMessageContent::class, $events[2]);
-        self::assertInstanceOf(TextMessageEnd::class, $events[3]);
-        self::assertInstanceOf(ToolCallStart::class, $events[4]);
+        static::assertInstanceOf(TextMessageStart::class, $events[1]);
+        static::assertInstanceOf(TextMessageContent::class, $events[2]);
+        static::assertInstanceOf(TextMessageEnd::class, $events[3]);
+        static::assertInstanceOf(ToolCallStart::class, $events[4]);
     }
 
     public function testConfirmationRequiredTerminatesRunWithInterruptOutcome(): void
@@ -197,16 +193,16 @@ final class AgUiAdapterTest extends TestCase
             AgentEvent::completed('never seen'),
         ])));
 
-        self::assertCount(2, $events);
-        self::assertInstanceOf(RunStarted::class, $events[0]);
-        self::assertInstanceOf(RunFinished::class, $events[1]);
+        static::assertCount(2, $events);
+        static::assertInstanceOf(RunStarted::class, $events[0]);
+        static::assertInstanceOf(RunFinished::class, $events[1]);
 
         $decoded = json_decode(json_encode($events[1], JSON_THROW_ON_ERROR), true);
-        self::assertSame('interrupt', $decoded['outcome']['type']);
-        self::assertCount(1, $decoded['outcome']['interrupts']);
-        self::assertSame('tool_confirmation', $decoded['outcome']['interrupts'][0]['reason']);
-        self::assertSame('About to write /x', $decoded['outcome']['interrupts'][0]['message']);
-        self::assertSame('call-9', $decoded['outcome']['interrupts'][0]['toolCallId']);
+        static::assertSame('interrupt', $decoded['outcome']['type']);
+        static::assertCount(1, $decoded['outcome']['interrupts']);
+        static::assertSame('tool_confirmation', $decoded['outcome']['interrupts'][0]['reason']);
+        static::assertSame('About to write /x', $decoded['outcome']['interrupts'][0]['message']);
+        static::assertSame('call-9', $decoded['outcome']['interrupts'][0]['toolCallId']);
     }
 
     public function testAgentEventErrorBecomesRunErrorAndTerminates(): void
@@ -221,17 +217,20 @@ final class AgUiAdapterTest extends TestCase
             AgentEvent::completed('never seen'),
         ])));
 
-        self::assertInstanceOf(RunStarted::class, $events[0]);
-        self::assertInstanceOf(TextMessageStart::class, $events[1]);
-        self::assertInstanceOf(TextMessageContent::class, $events[2]);
-        self::assertInstanceOf(TextMessageEnd::class, $events[3]);
-        self::assertInstanceOf(RunError::class, $events[4]);
-        self::assertCount(5, $events);
+        static::assertInstanceOf(RunStarted::class, $events[0]);
+        static::assertInstanceOf(TextMessageStart::class, $events[1]);
+        static::assertInstanceOf(TextMessageContent::class, $events[2]);
+        static::assertInstanceOf(TextMessageEnd::class, $events[3]);
+        static::assertInstanceOf(RunError::class, $events[4]);
+        static::assertCount(5, $events);
 
-        self::assertSame('Internal agent error.', $events[4]->message);
-        self::assertSame('AGENT_ERROR', $events[4]->code);
-        self::assertNotEmpty($logger->entries);
-        self::assertStringContainsString('Max iterations reached', (string) $logger->entries[0]['context']['message']);
+        static::assertSame('Internal agent error.', $events[4]->message);
+        static::assertSame('AGENT_ERROR', $events[4]->code);
+        static::assertNotEmpty($logger->entries);
+        static::assertStringContainsString(
+            'Max iterations reached',
+            (string) $logger->entries[0]['context']['message'],
+        );
     }
 
     public function testThrownDuringStreamLogsExceptionAndEmitsGenericRunError(): void
@@ -247,16 +246,16 @@ final class AgUiAdapterTest extends TestCase
 
         $events = $this->collect($adapter->run($throwing));
 
-        self::assertInstanceOf(RunStarted::class, $events[0]);
-        self::assertInstanceOf(TextMessageStart::class, $events[1]);
-        self::assertInstanceOf(TextMessageContent::class, $events[2]);
-        self::assertInstanceOf(TextMessageEnd::class, $events[3]);
-        self::assertInstanceOf(RunError::class, $events[4]);
-        self::assertSame('Internal agent error.', $events[4]->message);
-        self::assertSame('AGENT_ERROR', $events[4]->code);
+        static::assertInstanceOf(RunStarted::class, $events[0]);
+        static::assertInstanceOf(TextMessageStart::class, $events[1]);
+        static::assertInstanceOf(TextMessageContent::class, $events[2]);
+        static::assertInstanceOf(TextMessageEnd::class, $events[3]);
+        static::assertInstanceOf(RunError::class, $events[4]);
+        static::assertSame('Internal agent error.', $events[4]->message);
+        static::assertSame('AGENT_ERROR', $events[4]->code);
 
-        self::assertCount(1, $logger->entries);
-        self::assertInstanceOf(RuntimeException::class, $logger->entries[0]['context']['exception']);
+        static::assertCount(1, $logger->entries);
+        static::assertInstanceOf(RuntimeException::class, $logger->entries[0]['context']['exception']);
     }
 
     /**
@@ -293,21 +292,52 @@ final class RecordingLogger implements LoggerInterface
     public array $entries = [];
 
     #[Override]
-    public function emergency(string|Stringable $message, array $context = []): void { $this->log(LogLevel::EMERGENCY, $message, $context); }
+    public function emergency(string|Stringable $message, array $context = []): void
+    {
+        $this->log(LogLevel::EMERGENCY, $message, $context);
+    }
+
     #[Override]
-    public function alert(string|Stringable $message, array $context = []): void { $this->log(LogLevel::ALERT, $message, $context); }
+    public function alert(string|Stringable $message, array $context = []): void
+    {
+        $this->log(LogLevel::ALERT, $message, $context);
+    }
+
     #[Override]
-    public function critical(string|Stringable $message, array $context = []): void { $this->log(LogLevel::CRITICAL, $message, $context); }
+    public function critical(string|Stringable $message, array $context = []): void
+    {
+        $this->log(LogLevel::CRITICAL, $message, $context);
+    }
+
     #[Override]
-    public function error(string|Stringable $message, array $context = []): void { $this->log(LogLevel::ERROR, $message, $context); }
+    public function error(string|Stringable $message, array $context = []): void
+    {
+        $this->log(LogLevel::ERROR, $message, $context);
+    }
+
     #[Override]
-    public function warning(string|Stringable $message, array $context = []): void { $this->log(LogLevel::WARNING, $message, $context); }
+    public function warning(string|Stringable $message, array $context = []): void
+    {
+        $this->log(LogLevel::WARNING, $message, $context);
+    }
+
     #[Override]
-    public function notice(string|Stringable $message, array $context = []): void { $this->log(LogLevel::NOTICE, $message, $context); }
+    public function notice(string|Stringable $message, array $context = []): void
+    {
+        $this->log(LogLevel::NOTICE, $message, $context);
+    }
+
     #[Override]
-    public function info(string|Stringable $message, array $context = []): void { $this->log(LogLevel::INFO, $message, $context); }
+    public function info(string|Stringable $message, array $context = []): void
+    {
+        $this->log(LogLevel::INFO, $message, $context);
+    }
+
     #[Override]
-    public function debug(string|Stringable $message, array $context = []): void { $this->log(LogLevel::DEBUG, $message, $context); }
+    public function debug(string|Stringable $message, array $context = []): void
+    {
+        $this->log(LogLevel::DEBUG, $message, $context);
+    }
 
     #[Override]
     public function log($level, string|Stringable $message, array $context = []): void

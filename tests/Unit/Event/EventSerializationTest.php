@@ -36,18 +36,15 @@ final class EventSerializationTest extends TestCase
     public function testRunStartedJson(): void
     {
         $event = new RunStarted('t-1', 'r-1');
-        self::assertSame('RUN_STARTED', $event->type());
-        self::assertSame(
-            '{"type":"RUN_STARTED","threadId":"t-1","runId":"r-1"}',
-            $this->encode($event),
-        );
+        static::assertSame('RUN_STARTED', $event->type());
+        static::assertSame('{"type":"RUN_STARTED","threadId":"t-1","runId":"r-1"}', $this->encode($event));
     }
 
     public function testRunFinishedSuccessJson(): void
     {
         $event = RunFinished::success('t-1', 'r-1');
-        self::assertSame('RUN_FINISHED', $event->type());
-        self::assertSame(
+        static::assertSame('RUN_FINISHED', $event->type());
+        static::assertSame(
             '{"type":"RUN_FINISHED","threadId":"t-1","runId":"r-1","outcome":{"type":"success"}}',
             $this->encode($event),
         );
@@ -63,29 +60,29 @@ final class EventSerializationTest extends TestCase
         );
         $event = RunFinished::interrupt('t-1', 'r-1', [$interrupt]);
         $decoded = json_decode($this->encode($event), true);
-        self::assertSame([
-            'type' => 'RUN_FINISHED',
-            'threadId' => 't-1',
-            'runId' => 'r-1',
-            'outcome' => [
-                'type' => 'interrupt',
-                'interrupts' => [[
-                    'id' => 'int-1',
-                    'reason' => 'tool_confirmation',
-                    'message' => 'Approve writing 1 file?',
-                    'toolCallId' => 'call-1',
-                ]],
+        static::assertSame(
+            [
+                'type' => 'RUN_FINISHED',
+                'threadId' => 't-1',
+                'runId' => 'r-1',
+                'outcome' => [
+                    'type' => 'interrupt',
+                    'interrupts' => [[
+                        'id' => 'int-1',
+                        'reason' => 'tool_confirmation',
+                        'message' => 'Approve writing 1 file?',
+                        'toolCallId' => 'call-1',
+                    ]],
+                ],
             ],
-        ], $decoded);
+            $decoded,
+        );
     }
 
     public function testInterruptOmitsUnsetOptionalFields(): void
     {
         $interrupt = new Interrupt(id: 'int-1', reason: 'tool_confirmation');
-        self::assertSame(
-            '{"id":"int-1","reason":"tool_confirmation"}',
-            json_encode($interrupt, JSON_THROW_ON_ERROR),
-        );
+        static::assertSame('{"id":"int-1","reason":"tool_confirmation"}', json_encode($interrupt, JSON_THROW_ON_ERROR));
     }
 
     public function testInterruptIncludesAllOptionalFieldsWhenSet(): void
@@ -100,67 +97,55 @@ final class EventSerializationTest extends TestCase
             metadata: ['k' => 'v'],
         );
         $decoded = json_decode(json_encode($interrupt, JSON_THROW_ON_ERROR), true);
-        self::assertSame([
-            'id' => 'int-1',
-            'reason' => 'tool_confirmation',
-            'message' => 'msg',
-            'toolCallId' => 'call-1',
-            'responseSchema' => ['type' => 'object'],
-            'expiresAt' => '2026-01-01T00:00:00Z',
-            'metadata' => ['k' => 'v'],
-        ], $decoded);
+        static::assertSame(
+            [
+                'id' => 'int-1',
+                'reason' => 'tool_confirmation',
+                'message' => 'msg',
+                'toolCallId' => 'call-1',
+                'responseSchema' => ['type' => 'object'],
+                'expiresAt' => '2026-01-01T00:00:00Z',
+                'metadata' => ['k' => 'v'],
+            ],
+            $decoded,
+        );
     }
 
     public function testRunErrorWithCode(): void
     {
         $event = new RunError('boom', 'AGENT_ERROR');
-        self::assertSame('RUN_ERROR', $event->type());
-        self::assertSame(
-            '{"type":"RUN_ERROR","message":"boom","code":"AGENT_ERROR"}',
-            $this->encode($event),
-        );
+        static::assertSame('RUN_ERROR', $event->type());
+        static::assertSame('{"type":"RUN_ERROR","message":"boom","code":"AGENT_ERROR"}', $this->encode($event));
     }
 
     public function testRunErrorWithoutCode(): void
     {
         $event = new RunError('boom');
-        self::assertSame(
-            '{"type":"RUN_ERROR","message":"boom"}',
-            $this->encode($event),
-        );
+        static::assertSame('{"type":"RUN_ERROR","message":"boom"}', $this->encode($event));
     }
 
     public function testTextMessageStartDefaultsToAssistant(): void
     {
         $event = new TextMessageStart('m-1');
-        self::assertSame(
-            '{"type":"TEXT_MESSAGE_START","messageId":"m-1","role":"assistant"}',
-            $this->encode($event),
-        );
+        static::assertSame('{"type":"TEXT_MESSAGE_START","messageId":"m-1","role":"assistant"}', $this->encode($event));
     }
 
     public function testTextMessageContent(): void
     {
         $event = new TextMessageContent('m-1', 'hi');
-        self::assertSame(
-            '{"type":"TEXT_MESSAGE_CONTENT","messageId":"m-1","delta":"hi"}',
-            $this->encode($event),
-        );
+        static::assertSame('{"type":"TEXT_MESSAGE_CONTENT","messageId":"m-1","delta":"hi"}', $this->encode($event));
     }
 
     public function testTextMessageEnd(): void
     {
         $event = new TextMessageEnd('m-1');
-        self::assertSame(
-            '{"type":"TEXT_MESSAGE_END","messageId":"m-1"}',
-            $this->encode($event),
-        );
+        static::assertSame('{"type":"TEXT_MESSAGE_END","messageId":"m-1"}', $this->encode($event));
     }
 
     public function testToolCallStartOmitsParentMessageIdByDefault(): void
     {
         $event = new ToolCallStart('call-1', 'search');
-        self::assertSame(
+        static::assertSame(
             '{"type":"TOOL_CALL_START","toolCallId":"call-1","toolCallName":"search"}',
             $this->encode($event),
         );
@@ -169,7 +154,7 @@ final class EventSerializationTest extends TestCase
     public function testToolCallStartIncludesParentMessageId(): void
     {
         $event = new ToolCallStart('call-1', 'search', 'm-1');
-        self::assertSame(
+        static::assertSame(
             '{"type":"TOOL_CALL_START","toolCallId":"call-1","toolCallName":"search","parentMessageId":"m-1"}',
             $this->encode($event),
         );
@@ -178,7 +163,7 @@ final class EventSerializationTest extends TestCase
     public function testToolCallArgs(): void
     {
         $event = new ToolCallArgs('call-1', '{"q":"hi"}');
-        self::assertSame(
+        static::assertSame(
             '{"type":"TOOL_CALL_ARGS","toolCallId":"call-1","delta":"{\\"q\\":\\"hi\\"}"}',
             $this->encode($event),
         );
@@ -187,16 +172,13 @@ final class EventSerializationTest extends TestCase
     public function testToolCallEnd(): void
     {
         $event = new ToolCallEnd('call-1');
-        self::assertSame(
-            '{"type":"TOOL_CALL_END","toolCallId":"call-1"}',
-            $this->encode($event),
-        );
+        static::assertSame('{"type":"TOOL_CALL_END","toolCallId":"call-1"}', $this->encode($event));
     }
 
     public function testToolCallResult(): void
     {
         $event = new ToolCallResult('m-tool-1', 'call-1', 'ok');
-        self::assertSame(
+        static::assertSame(
             '{"type":"TOOL_CALL_RESULT","messageId":"m-tool-1","toolCallId":"call-1","content":"ok","role":"tool"}',
             $this->encode($event),
         );
@@ -204,19 +186,16 @@ final class EventSerializationTest extends TestCase
 
     public function testRunOutcomeSuccess(): void
     {
-        self::assertSame(
-            '{"type":"success"}',
-            json_encode(RunOutcome::success(), JSON_THROW_ON_ERROR),
-        );
+        static::assertSame('{"type":"success"}', json_encode(RunOutcome::success(), JSON_THROW_ON_ERROR));
     }
 
     public function testRunOutcomeInterruptCarriesInterruptList(): void
     {
         $outcome = RunOutcome::interrupt([new Interrupt('id-1', 'tool_confirmation')]);
-        self::assertSame(
-            '{"type":"interrupt","interrupts":[{"id":"id-1","reason":"tool_confirmation"}]}',
-            json_encode($outcome, JSON_THROW_ON_ERROR),
-        );
+        static::assertSame('{"type":"interrupt","interrupts":[{"id":"id-1","reason":"tool_confirmation"}]}', json_encode(
+            $outcome,
+            JSON_THROW_ON_ERROR,
+        ));
     }
 
     private function encode(\JsonSerializable $event): string

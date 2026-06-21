@@ -18,17 +18,18 @@ final class RunAgentInputTest extends TestCase
 
         $input = RunAgentInput::fromJson($body);
 
-        self::assertSame('t-1', $input->threadId);
-        self::assertSame('r-1', $input->runId);
-        self::assertSame([['role' => 'user', 'content' => 'hi']], $input->messages);
-        self::assertSame([], $input->tools);
-        self::assertSame([], $input->resume);
-        self::assertNull($input->state);
+        static::assertSame('t-1', $input->threadId);
+        static::assertSame('r-1', $input->runId);
+        static::assertSame([['role' => 'user', 'content' => 'hi']], $input->messages);
+        static::assertSame([], $input->tools);
+        static::assertSame([], $input->resume);
+        static::assertNull($input->state);
     }
 
     public function testFromJsonAcceptsOptionalFields(): void
     {
-        $body = '{"threadId":"t","runId":"r","messages":[{"role":"user","content":"hi"}],'
+        $body =
+            '{"threadId":"t","runId":"r","messages":[{"role":"user","content":"hi"}],'
             . '"tools":[{"name":"search","description":"","parameters":{}}],'
             . '"context":[{"description":"d","value":"v"}],'
             . '"state":{"k":"v"},"forwardedProps":{"a":1},'
@@ -36,11 +37,11 @@ final class RunAgentInputTest extends TestCase
 
         $input = RunAgentInput::fromJson($body);
 
-        self::assertSame(['search'], $input->declaredToolNames());
-        self::assertSame(['k' => 'v'], $input->state);
-        self::assertSame(['a' => 1], $input->forwardedProps);
-        self::assertCount(1, $input->resume);
-        self::assertSame('i-1', $input->resume[0]['interruptId']);
+        static::assertSame(['search'], $input->declaredToolNames());
+        static::assertSame(['k' => 'v'], $input->state);
+        static::assertSame(['a' => 1], $input->forwardedProps);
+        static::assertCount(1, $input->resume);
+        static::assertSame('i-1', $input->resume[0]['interruptId']);
     }
 
     public function testFromJsonRejectsNonObjectBody(): void
@@ -77,40 +78,31 @@ final class RunAgentInputTest extends TestCase
 
     public function testLastUserMessageReturnsMostRecent(): void
     {
-        $input = new RunAgentInput(
-            threadId: 't',
-            runId: 'r',
-            messages: [
-                ['role' => 'user', 'content' => 'first'],
-                ['role' => 'assistant', 'content' => 'reply'],
-                ['role' => 'user', 'content' => 'second'],
-            ],
-        );
+        $input = new RunAgentInput(threadId: 't', runId: 'r', messages: [
+            ['role' => 'user', 'content' => 'first'],
+            ['role' => 'assistant', 'content' => 'reply'],
+            ['role' => 'user', 'content' => 'second'],
+        ]);
 
-        self::assertSame('second', $input->lastUserMessage());
+        static::assertSame('second', $input->lastUserMessage());
     }
 
     public function testLastUserMessageSkipsNonUserMessages(): void
     {
-        $input = new RunAgentInput(
-            threadId: 't',
-            runId: 'r',
-            messages: [
-                ['role' => 'user', 'content' => 'hi'],
-                ['role' => 'tool', 'content' => 'result'],
-            ],
-        );
+        $input = new RunAgentInput(threadId: 't', runId: 'r', messages: [
+            ['role' => 'user', 'content' => 'hi'],
+            ['role' => 'tool', 'content' => 'result'],
+        ]);
 
-        self::assertSame('hi', $input->lastUserMessage());
+        static::assertSame('hi', $input->lastUserMessage());
     }
 
     public function testLastUserMessageThrowsWhenAbsent(): void
     {
-        $input = new RunAgentInput(
-            threadId: 't',
-            runId: 'r',
-            messages: [['role' => 'assistant', 'content' => 'reply']],
-        );
+        $input = new RunAgentInput(threadId: 't', runId: 'r', messages: [[
+            'role' => 'assistant',
+            'content' => 'reply',
+        ]]);
 
         $this->expectException(InvalidArgumentException::class);
         $input->lastUserMessage();
@@ -129,6 +121,6 @@ final class RunAgentInputTest extends TestCase
             ],
         );
 
-        self::assertSame(['search', 'fetch'], $input->declaredToolNames());
+        static::assertSame(['search', 'fetch'], $input->declaredToolNames());
     }
 }

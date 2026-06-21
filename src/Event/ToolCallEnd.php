@@ -16,8 +16,7 @@ final readonly class ToolCallEnd implements AgUiEventInterface
 {
     public function __construct(
         public string $toolCallId,
-    ) {
-    }
+    ) {}
 
     #[Override]
     public function type(): string

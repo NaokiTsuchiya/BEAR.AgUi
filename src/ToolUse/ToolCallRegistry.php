@@ -68,7 +68,7 @@ final class ToolCallRegistry implements ToolCallRecorder, ToolCallView
     }
 
     #[Override]
-    public function nextStarted(): StartedToolCall|null
+    public function nextStarted(): ?StartedToolCall
     {
         if ($this->started === []) {
             return null;
@@ -78,9 +78,9 @@ final class ToolCallRegistry implements ToolCallRecorder, ToolCallView
     }
 
     #[Override]
-    public function resultFor(string $id): ToolCallOutcome|null
+    public function resultFor(string $id): ?ToolCallOutcome
     {
-        if (! array_key_exists($id, $this->outcomes)) {
+        if (!array_key_exists($id, $this->outcomes)) {
             return null;
         }
 
@@ -90,10 +90,7 @@ final class ToolCallRegistry implements ToolCallRecorder, ToolCallView
     /** @param array<string, mixed> $input */
     private function encodeInput(array $input): string
     {
-        return json_encode(
-            $input,
-            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-        );
+        return json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     private function stringify(mixed $content): string
@@ -110,9 +107,6 @@ final class ToolCallRegistry implements ToolCallRecorder, ToolCallView
             return (string) $content;
         }
 
-        return json_encode(
-            $content,
-            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-        );
+        return json_encode($content, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 }
