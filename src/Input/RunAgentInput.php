@@ -5,14 +5,10 @@ declare(strict_types=1);
 namespace NaokiTsuchiya\BEARAgUi\Input;
 
 use InvalidArgumentException;
+use JsonException;
 
-use function array_key_exists;
 use function count;
-use function is_array;
 use function is_string;
-use function json_decode;
-
-use const JSON_THROW_ON_ERROR;
 
 /**
  * AG-UI RunAgentInput as a typed value object.
@@ -61,65 +57,15 @@ final readonly class RunAgentInput
     /**
      * Build + validate from a raw JSON request body.
      *
+     * Thin facade over {@see RunAgentInputParser::parse()} — kept on this
+     * class so callers (and tests) have one obvious entry point.
+     *
      * @throws InvalidArgumentException on malformed input (→ HTTP 400 upstream).
-     * @throws \JsonException when the body is not valid JSON.
+     * @throws JsonException when the body is not valid JSON.
      */
     public static function fromJson(string $body): self
     {
-        /** @var mixed $data */
-        $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
-        if (!is_array($data)) {
-            throw new InvalidArgumentException('RunAgentInput must be a JSON object.');
-        }
-
-        foreach (['threadId', 'runId'] as $required) {
-            if (!array_key_exists($required, $data) || !is_string($data[$required]) || $data[$required] === '') {
-                throw new InvalidArgumentException("Missing or invalid '{$required}'.");
-            }
-        }
-
-        if (!isset($data['messages']) || !is_array($data['messages'])) {
-            throw new InvalidArgumentException("Missing or invalid 'messages'.");
-        }
-
-        /** @var array<string, mixed>|null $state */
-        $state = is_array($data['state'] ?? null) ? $data['state'] : null;
-        /** @var array<string, mixed> $forwardedProps */
-        $forwardedProps = is_array($data['forwardedProps'] ?? null) ? $data['forwardedProps'] : [];
-
-        return new self(
-            threadId: (string) $data['threadId'],
-            runId: (string) $data['runId'],
-            messages: self::ensureListOfObjects($data['messages']),
-            tools: self::ensureListOfObjects($data['tools'] ?? []),
-            context: self::ensureListOfObjects($data['context'] ?? []),
-            state: $state,
-            forwardedProps: $forwardedProps,
-            resume: self::ensureListOfObjects($data['resume'] ?? []),
-        );
-    }
-
-    /**
-     * Coerce an arbitrary value into a list of associative arrays. Non-array
-     * inputs become an empty list; non-array entries are dropped.
-     *
-     * @return list<array<string, mixed>>
-     */
-    private static function ensureListOfObjects(mixed $value): array
-    {
-        if (!is_array($value)) {
-            return [];
-        }
-
-        $list = [];
-        foreach ($value as $entry) {
-            if (is_array($entry)) {
-                /** @var array<string, mixed> $entry */
-                $list[] = $entry;
-            }
-        }
-
-        return $list;
+        return (new RunAgentInputParser())->parse($body);
     }
 
     /**
@@ -134,8 +80,9 @@ final readonly class RunAgentInput
     {
         for ($i = count($this->messages) - 1; $i >= 0; $i--) {
             $message = $this->messages[$i];
-            if (($message['role'] ?? null) === 'user' && isset($message['content']) && is_string($message['content'])) {
-                return $message['content'];
+            $content = $message['content'] ?? null;
+            if (($message['role'] ?? null) === 'user' && is_string($content)) {
+                return $content;
             }
         }
 
@@ -152,11 +99,12 @@ final readonly class RunAgentInput
     {
         $names = [];
         foreach ($this->tools as $tool) {
-            if (!(isset($tool['name']) && is_string($tool['name']))) {
+            $name = $tool['name'] ?? null;
+            if (!is_string($name)) {
                 continue;
             }
 
-            $names[] = $tool['name'];
+            $names[] = $name;
         }
 
         return $names;

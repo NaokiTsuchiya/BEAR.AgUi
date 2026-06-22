@@ -47,18 +47,34 @@ final readonly class RecordingStreamingLlmClient implements StreamingLlmClientIn
         $currentId = '';
 
         foreach ($stream as $event) {
-            if ($event->type === StreamEvent::TOOL_USE_START) {
-                $id = $this->dataString($event, 'id');
-                $name = $this->dataString($event, 'name');
-                $currentId = $id;
-                $this->recorder->recordStart($id, $name);
-            } elseif ($event->type === StreamEvent::TOOL_USE_DELTA && $currentId !== '') {
-                $this->recorder->appendInput($currentId, $this->dataString($event, 'input'));
-            } elseif ($event->type === StreamEvent::CONTENT_BLOCK_STOP) {
-                $currentId = '';
-            }
+            $currentId = $this->observe($event, $currentId);
 
             yield $event;
+        }
+    }
+
+    /** Side-effect: forward observed start/delta to the recorder, return the updated current id. */
+    private function observe(StreamEvent $event, string $currentId): string
+    {
+        switch ($event->type) {
+            case StreamEvent::TOOL_USE_START:
+                $id = $this->dataString($event, 'id');
+                $this->recorder->recordStart($id, $this->dataString($event, 'name'));
+
+                return $id;
+
+            case StreamEvent::TOOL_USE_DELTA:
+                if ($currentId !== '') {
+                    $this->recorder->appendInput($currentId, $this->dataString($event, 'input'));
+                }
+
+                return $currentId;
+
+            case StreamEvent::CONTENT_BLOCK_STOP:
+                return '';
+
+            default:
+                return $currentId;
         }
     }
 
