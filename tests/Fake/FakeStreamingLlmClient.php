@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Tests\Fake;
+namespace NaokiTsuchiya\BEARAgUi\Fake;
 
 use BEAR\ToolUse\Llm\StreamEvent;
 use BEAR\ToolUse\Llm\StreamingLlmClientInterface;

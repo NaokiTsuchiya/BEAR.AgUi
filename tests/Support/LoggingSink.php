@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Tests\Support;
+namespace NaokiTsuchiya\BEARAgUi\Support;
 
 use NaokiTsuchiya\BEARAgUi\Sse\SseSinkInterface;
 use Override;

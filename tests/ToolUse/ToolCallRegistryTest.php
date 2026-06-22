@@ -2,11 +2,10 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Tests\Unit\ToolUse;
+namespace NaokiTsuchiya\BEARAgUi\ToolUse;
 
 use BEAR\ToolUse\Dispatch\ToolCall;
 use BEAR\ToolUse\Dispatch\ToolResult;
-use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 

@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Tests\Support;
+namespace NaokiTsuchiya\BEARAgUi\Support;
 
 use BEAR\ToolUse\Runtime\StreamingAgent;
 use BEAR\ToolUse\Schema\Tool;
 use NaokiTsuchiya\BEARAgUi\Adapter\AgUiAdapter;
 use NaokiTsuchiya\BEARAgUi\Event\AgUiEventInterface;
-use NaokiTsuchiya\BEARAgUi\Tests\Fake\FakeDispatcher;
-use NaokiTsuchiya\BEARAgUi\Tests\Fake\FakeStreamingLlmClient;
+use NaokiTsuchiya\BEARAgUi\Fake\FakeDispatcher;
+use NaokiTsuchiya\BEARAgUi\Fake\FakeStreamingLlmClient;
 use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingDispatcher;
 use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingStreamingLlmClient;
 use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;

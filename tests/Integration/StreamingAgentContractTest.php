@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Tests\Integration;
+namespace NaokiTsuchiya\BEARAgUi\Integration;
 
 use BEAR\ToolUse\Llm\StreamEvent;
 use BEAR\ToolUse\Runtime\StreamingAgent;
@@ -16,9 +16,9 @@ use NaokiTsuchiya\BEARAgUi\Event\ToolCallArgs;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallEnd;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallResult;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallStart;
-use NaokiTsuchiya\BEARAgUi\Tests\Fake\FakeDispatcher;
-use NaokiTsuchiya\BEARAgUi\Tests\Fake\FakeStreamingLlmClient;
-use NaokiTsuchiya\BEARAgUi\Tests\Support\StreamingPipelineFixture;
+use NaokiTsuchiya\BEARAgUi\Fake\FakeDispatcher;
+use NaokiTsuchiya\BEARAgUi\Fake\FakeStreamingLlmClient;
+use NaokiTsuchiya\BEARAgUi\Support\StreamingPipelineFixture;
 use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingDispatcher;
 use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingStreamingLlmClient;
 use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;

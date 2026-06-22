@@ -2,12 +2,10 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Tests\Unit\ToolUse;
+namespace NaokiTsuchiya\BEARAgUi\ToolUse;
 
 use BEAR\ToolUse\Dispatch\ToolCall;
-use NaokiTsuchiya\BEARAgUi\Tests\Fake\FakeDispatcher;
-use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingDispatcher;
-use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;
+use NaokiTsuchiya\BEARAgUi\Fake\FakeDispatcher;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;

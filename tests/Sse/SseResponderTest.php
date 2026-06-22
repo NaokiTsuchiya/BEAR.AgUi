@@ -2,15 +2,13 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Tests\Unit\Sse;
+namespace NaokiTsuchiya\BEARAgUi\Sse;
 
 use Generator;
 use NaokiTsuchiya\BEARAgUi\Event\RunStarted;
 use NaokiTsuchiya\BEARAgUi\Event\TextMessageContent;
-use NaokiTsuchiya\BEARAgUi\Sse\SseEncoder;
-use NaokiTsuchiya\BEARAgUi\Sse\SseResponder;
-use NaokiTsuchiya\BEARAgUi\Tests\Support\LoggingSink;
-use NaokiTsuchiya\BEARAgUi\Tests\Support\RecordingSink;
+use NaokiTsuchiya\BEARAgUi\Support\LoggingSink;
+use NaokiTsuchiya\BEARAgUi\Support\RecordingSink;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 

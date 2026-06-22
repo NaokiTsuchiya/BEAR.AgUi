@@ -2,13 +2,12 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Tests\Unit\Adapter;
+namespace NaokiTsuchiya\BEARAgUi\Adapter;
 
 use BEAR\ToolUse\Dispatch\ToolCall;
 use BEAR\ToolUse\Dispatch\ToolResult;
 use BEAR\ToolUse\Runtime\AgentEvent;
 use Generator;
-use NaokiTsuchiya\BEARAgUi\Adapter\AgUiAdapter;
 use NaokiTsuchiya\BEARAgUi\Event\AgUiEventInterface;
 use NaokiTsuchiya\BEARAgUi\Event\RunError;
 use NaokiTsuchiya\BEARAgUi\Event\RunFinished;
@@ -20,7 +19,7 @@ use NaokiTsuchiya\BEARAgUi\Event\ToolCallArgs;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallEnd;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallResult;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallStart;
-use NaokiTsuchiya\BEARAgUi\Tests\Support\RecordingLogger;
+use NaokiTsuchiya\BEARAgUi\Support\RecordingLogger;
 use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;

@@ -2,10 +2,9 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Tests\Unit\Input;
+namespace NaokiTsuchiya\BEARAgUi\Input;
 
 use InvalidArgumentException;
-use NaokiTsuchiya\BEARAgUi\Input\RunAgentInput;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 

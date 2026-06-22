@@ -2,11 +2,10 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Tests\Unit\Sse;
+namespace NaokiTsuchiya\BEARAgUi\Sse;
 
 use NaokiTsuchiya\BEARAgUi\Event\RunStarted;
 use NaokiTsuchiya\BEARAgUi\Event\TextMessageContent;
-use NaokiTsuchiya\BEARAgUi\Sse\SseEncoder;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 

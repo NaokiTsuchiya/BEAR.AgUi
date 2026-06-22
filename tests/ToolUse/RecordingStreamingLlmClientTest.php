@@ -2,14 +2,12 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Tests\Unit\ToolUse;
+namespace NaokiTsuchiya\BEARAgUi\ToolUse;
 
 use BEAR\ToolUse\Dispatch\ToolCall;
 use BEAR\ToolUse\Dispatch\ToolResult;
 use BEAR\ToolUse\Llm\StreamEvent;
-use NaokiTsuchiya\BEARAgUi\Tests\Fake\FakeStreamingLlmClient;
-use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingStreamingLlmClient;
-use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;
+use NaokiTsuchiya\BEARAgUi\Fake\FakeStreamingLlmClient;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 

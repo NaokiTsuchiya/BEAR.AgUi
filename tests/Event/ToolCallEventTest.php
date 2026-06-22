@@ -2,13 +2,9 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Tests\Unit\Event;
+namespace NaokiTsuchiya\BEARAgUi\Event;
 
 use JsonSerializable;
-use NaokiTsuchiya\BEARAgUi\Event\ToolCallArgs;
-use NaokiTsuchiya\BEARAgUi\Event\ToolCallEnd;
-use NaokiTsuchiya\BEARAgUi\Event\ToolCallResult;
-use NaokiTsuchiya\BEARAgUi\Event\ToolCallStart;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 

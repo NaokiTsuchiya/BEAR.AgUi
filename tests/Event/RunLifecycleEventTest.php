@@ -2,14 +2,9 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Tests\Unit\Event;
+namespace NaokiTsuchiya\BEARAgUi\Event;
 
 use JsonSerializable;
-use NaokiTsuchiya\BEARAgUi\Event\Interrupt;
-use NaokiTsuchiya\BEARAgUi\Event\RunError;
-use NaokiTsuchiya\BEARAgUi\Event\RunFinished;
-use NaokiTsuchiya\BEARAgUi\Event\RunOutcome;
-use NaokiTsuchiya\BEARAgUi\Event\RunStarted;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
