@@ -38,7 +38,7 @@ final class OpenTextMessage
     {
         if ($this->id === null) {
             $this->id = $this->idMinter->mint('msg');
-            yield new TextMessageStart($this->id);
+            yield new TextMessageStart($this->id, 'assistant');
         }
     }
 

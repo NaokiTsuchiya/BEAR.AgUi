@@ -17,7 +17,7 @@ final readonly class ToolCallStart implements AgUiEventInterface
     public function __construct(
         public string $toolCallId,
         public string $toolCallName,
-        public string|null $parentMessageId = null,
+        public string|null $parentMessageId,
     ) {}
 
     #[Override]

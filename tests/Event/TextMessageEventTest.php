@@ -16,9 +16,9 @@ use const JSON_UNESCAPED_SLASHES;
 #[CoversClass(TextMessageEnd::class)]
 final class TextMessageEventTest extends TestCase
 {
-    public function testTextMessageStartDefaultsToAssistant(): void
+    public function testTextMessageStartIncludesRole(): void
     {
-        $event = new TextMessageStart('m-1');
+        $event = new TextMessageStart('m-1', 'assistant');
         static::assertSame('{"type":"TEXT_MESSAGE_START","messageId":"m-1","role":"assistant"}', $this->encode($event));
     }
 

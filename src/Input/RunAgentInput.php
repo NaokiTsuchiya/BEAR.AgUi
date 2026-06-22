@@ -47,11 +47,11 @@ final readonly class RunAgentInput
         public string $threadId,
         public string $runId,
         public array $messages,
-        public array $tools = [],
-        public array $context = [],
-        public array|null $state = null,
-        public array $forwardedProps = [],
-        public array $resume = [],
+        public array $tools,
+        public array $context,
+        public array|null $state,
+        public array $forwardedProps,
+        public array $resume,
     ) {}
 
     /**

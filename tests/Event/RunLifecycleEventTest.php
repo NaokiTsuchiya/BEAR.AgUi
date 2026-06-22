@@ -42,6 +42,9 @@ final class RunLifecycleEventTest extends TestCase
             reason: 'tool_confirmation',
             message: 'Approve writing 1 file?',
             toolCallId: 'call-1',
+            responseSchema: null,
+            expiresAt: null,
+            metadata: null,
         );
         $event = RunFinished::interrupt('t-1', 'r-1', [$interrupt]);
         $decoded = json_decode($this->encode($event), true);
@@ -66,7 +69,15 @@ final class RunLifecycleEventTest extends TestCase
 
     public function testInterruptOmitsUnsetOptionalFields(): void
     {
-        $interrupt = new Interrupt(id: 'int-1', reason: 'tool_confirmation');
+        $interrupt = new Interrupt(
+            id: 'int-1',
+            reason: 'tool_confirmation',
+            message: null,
+            toolCallId: null,
+            responseSchema: null,
+            expiresAt: null,
+            metadata: null,
+        );
         static::assertSame('{"id":"int-1","reason":"tool_confirmation"}', json_encode($interrupt, JSON_THROW_ON_ERROR));
     }
 
@@ -105,7 +116,7 @@ final class RunLifecycleEventTest extends TestCase
 
     public function testRunErrorWithoutCode(): void
     {
-        $event = new RunError('boom');
+        $event = new RunError('boom', null);
         static::assertSame('{"type":"RUN_ERROR","message":"boom"}', $this->encode($event));
     }
 
@@ -116,7 +127,17 @@ final class RunLifecycleEventTest extends TestCase
 
     public function testRunOutcomeInterruptCarriesInterruptList(): void
     {
-        $outcome = RunOutcome::interrupt([new Interrupt('id-1', 'tool_confirmation')]);
+        $outcome = RunOutcome::interrupt([
+            new Interrupt(
+                id: 'id-1',
+                reason: 'tool_confirmation',
+                message: null,
+                toolCallId: null,
+                responseSchema: null,
+                expiresAt: null,
+                metadata: null,
+            ),
+        ]);
         static::assertSame('{"type":"interrupt","interrupts":[{"id":"id-1","reason":"tool_confirmation"}]}', json_encode(
             $outcome,
             JSON_THROW_ON_ERROR,

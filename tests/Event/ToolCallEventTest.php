@@ -19,7 +19,7 @@ final class ToolCallEventTest extends TestCase
 {
     public function testToolCallStartOmitsParentMessageIdByDefault(): void
     {
-        $event = new ToolCallStart('call-1', 'search');
+        $event = new ToolCallStart('call-1', 'search', null);
         static::assertSame(
             '{"type":"TOOL_CALL_START","toolCallId":"call-1","toolCallName":"search"}',
             $this->encode($event),
@@ -52,7 +52,7 @@ final class ToolCallEventTest extends TestCase
 
     public function testToolCallResult(): void
     {
-        $event = new ToolCallResult('m-tool-1', 'call-1', 'ok');
+        $event = new ToolCallResult('m-tool-1', 'call-1', 'ok', 'tool');
         static::assertSame(
             '{"type":"TOOL_CALL_RESULT","messageId":"m-tool-1","toolCallId":"call-1","content":"ok","role":"tool"}',
             $this->encode($event),

@@ -15,7 +15,7 @@ final readonly class TextMessageStart implements AgUiEventInterface
 {
     public function __construct(
         public string $messageId,
-        public string $role = 'assistant',
+        public string $role,
     ) {}
 
     #[Override]

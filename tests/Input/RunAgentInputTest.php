@@ -77,31 +77,55 @@ final class RunAgentInputTest extends TestCase
 
     public function testLastUserMessageReturnsMostRecent(): void
     {
-        $input = new RunAgentInput(threadId: 't', runId: 'r', messages: [
-            ['role' => 'user', 'content' => 'first'],
-            ['role' => 'assistant', 'content' => 'reply'],
-            ['role' => 'user', 'content' => 'second'],
-        ]);
+        $input = new RunAgentInput(
+            threadId: 't',
+            runId: 'r',
+            messages: [
+                ['role' => 'user', 'content' => 'first'],
+                ['role' => 'assistant', 'content' => 'reply'],
+                ['role' => 'user', 'content' => 'second'],
+            ],
+            tools: [],
+            context: [],
+            state: null,
+            forwardedProps: [],
+            resume: [],
+        );
 
         static::assertSame('second', $input->lastUserMessage());
     }
 
     public function testLastUserMessageSkipsNonUserMessages(): void
     {
-        $input = new RunAgentInput(threadId: 't', runId: 'r', messages: [
-            ['role' => 'user', 'content' => 'hi'],
-            ['role' => 'tool', 'content' => 'result'],
-        ]);
+        $input = new RunAgentInput(
+            threadId: 't',
+            runId: 'r',
+            messages: [
+                ['role' => 'user', 'content' => 'hi'],
+                ['role' => 'tool', 'content' => 'result'],
+            ],
+            tools: [],
+            context: [],
+            state: null,
+            forwardedProps: [],
+            resume: [],
+        );
 
         static::assertSame('hi', $input->lastUserMessage());
     }
 
     public function testLastUserMessageThrowsWhenAbsent(): void
     {
-        $input = new RunAgentInput(threadId: 't', runId: 'r', messages: [[
-            'role' => 'assistant',
-            'content' => 'reply',
-        ]]);
+        $input = new RunAgentInput(
+            threadId: 't',
+            runId: 'r',
+            messages: [['role' => 'assistant', 'content' => 'reply']],
+            tools: [],
+            context: [],
+            state: null,
+            forwardedProps: [],
+            resume: [],
+        );
 
         $this->expectException(InvalidArgumentException::class);
         $input->lastUserMessage();
@@ -118,6 +142,10 @@ final class RunAgentInputTest extends TestCase
                 ['description' => 'no name here'],
                 ['name' => 'fetch'],
             ],
+            context: [],
+            state: null,
+            forwardedProps: [],
+            resume: [],
         );
 
         static::assertSame(['search', 'fetch'], $input->declaredToolNames());

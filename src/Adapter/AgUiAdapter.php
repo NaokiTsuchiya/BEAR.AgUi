@@ -136,7 +136,7 @@ final class AgUiAdapter
         $name = $started !== null ? $started->name : $this->dataString($event, 'toolName');
 
         $this->awaitingResult[] = $id;
-        yield new ToolCallStart($id, $name);
+        yield new ToolCallStart($id, $name, null);
     }
 
     /** @return Generator<int, AgUiEventInterface, mixed, void> */
@@ -152,7 +152,7 @@ final class AgUiAdapter
         }
 
         yield new ToolCallEnd($id);
-        yield new ToolCallResult($this->idMinter->mint('msg'), $id, $content);
+        yield new ToolCallResult($this->idMinter->mint('msg'), $id, $content, 'tool');
     }
 
     /** @return Generator<int, AgUiEventInterface, mixed, void> */
@@ -164,6 +164,9 @@ final class AgUiAdapter
             reason: 'tool_confirmation',
             message: $this->dataString($event, 'message'),
             toolCallId: $this->dataString($event, 'toolId'),
+            responseSchema: null,
+            expiresAt: null,
+            metadata: null,
         );
         yield RunFinished::interrupt($this->threadId, $this->runId, [$interrupt]);
         $this->terminated = true;
