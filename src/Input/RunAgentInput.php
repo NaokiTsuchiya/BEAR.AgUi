@@ -40,6 +40,12 @@ final readonly class RunAgentInput
      * @param array<string, mixed>|null  $state
      * @param array<string, mixed>       $forwardedProps
      * @param list<array<string, mixed>> $resume
+     *
+     * @mago-expect lint:excessive-parameter-list
+     *
+     * The constructor mirrors the AG-UI RunAgentInput wire schema
+     * (threadId, runId, messages, tools, context, state, forwardedProps,
+     * resume); splitting it into sub-DTOs would drift from the spec.
      */
     public function __construct(
         public string $threadId,

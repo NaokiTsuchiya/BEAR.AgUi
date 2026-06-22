@@ -23,22 +23,6 @@ integrations = ["phpunit"]
 ambiguous-function-call = { enabled = false }
 literal-named-argument = { enabled = false }
 halstead = { effort-threshold = 7000 }
-# Allowed: isset on array keys is the idiomatic existence check.
-no-isset = { enabled = false }
-# Allowed: explicit else can read more clearly than an early-return guard.
-no-else-clause = { enabled = false }
-# Allowed: PhpSapiSseSink intentionally suppresses ob/flush warnings on FPM.
-no-error-control-operator = { enabled = false }
-# Allowed: DTOs (RunAgentInput, Interrupt) naturally take many constructor args.
-excessive-parameter-list = { enabled = false }
-# Allowed: PHPUnit test classes group many small tests by feature area.
-too-many-methods = { enabled = false }
-# Allowed: tests collocate tiny fixture classes (RecordingSink, LoggingSink, ...).
-single-class-per-file = { enabled = false }
-# Allowed: confirm-flag helper in test fixtures.
-no-boolean-flag-parameter = { enabled = false }
-# RunAgentInput::fromJson is validation-heavy; tolerate slightly higher complexity.
-cyclomatic-complexity = { enabled = false }
 
 [analyzer]
 plugins = []
