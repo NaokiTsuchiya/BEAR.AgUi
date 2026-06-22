@@ -20,14 +20,11 @@ use NaokiTsuchiya\BEARAgUi\Event\ToolCallArgs;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallEnd;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallResult;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallStart;
+use NaokiTsuchiya\BEARAgUi\Tests\Support\RecordingLogger;
 use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;
-use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Psr\Log\LoggerInterface;
-use Psr\Log\LogLevel;
 use RuntimeException;
-use Stringable;
 
 #[CoversClass(AgUiAdapter::class)]
 final class AgUiAdapterTest extends TestCase
@@ -283,65 +280,5 @@ final class AgUiAdapterTest extends TestCase
         foreach ($events as $event) {
             yield $event;
         }
-    }
-}
-
-final class RecordingLogger implements LoggerInterface
-{
-    /** @var list<array{level:string, message:string, context:array<string,mixed>}> */
-    public array $entries = [];
-
-    #[Override]
-    public function emergency(string|Stringable $message, array $context = []): void
-    {
-        $this->log(LogLevel::EMERGENCY, $message, $context);
-    }
-
-    #[Override]
-    public function alert(string|Stringable $message, array $context = []): void
-    {
-        $this->log(LogLevel::ALERT, $message, $context);
-    }
-
-    #[Override]
-    public function critical(string|Stringable $message, array $context = []): void
-    {
-        $this->log(LogLevel::CRITICAL, $message, $context);
-    }
-
-    #[Override]
-    public function error(string|Stringable $message, array $context = []): void
-    {
-        $this->log(LogLevel::ERROR, $message, $context);
-    }
-
-    #[Override]
-    public function warning(string|Stringable $message, array $context = []): void
-    {
-        $this->log(LogLevel::WARNING, $message, $context);
-    }
-
-    #[Override]
-    public function notice(string|Stringable $message, array $context = []): void
-    {
-        $this->log(LogLevel::NOTICE, $message, $context);
-    }
-
-    #[Override]
-    public function info(string|Stringable $message, array $context = []): void
-    {
-        $this->log(LogLevel::INFO, $message, $context);
-    }
-
-    #[Override]
-    public function debug(string|Stringable $message, array $context = []): void
-    {
-        $this->log(LogLevel::DEBUG, $message, $context);
-    }
-
-    #[Override]
-    public function log($level, string|Stringable $message, array $context = []): void
-    {
-        $this->entries[] = ['level' => (string) $level, 'message' => (string) $message, 'context' => $context];
     }
 }

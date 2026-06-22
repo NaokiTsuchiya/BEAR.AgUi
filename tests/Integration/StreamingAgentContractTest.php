@@ -6,9 +6,7 @@ namespace NaokiTsuchiya\BEARAgUi\Tests\Integration;
 
 use BEAR\ToolUse\Llm\StreamEvent;
 use BEAR\ToolUse\Runtime\StreamingAgent;
-use BEAR\ToolUse\Schema\Tool;
 use NaokiTsuchiya\BEARAgUi\Adapter\AgUiAdapter;
-use NaokiTsuchiya\BEARAgUi\Event\AgUiEventInterface;
 use NaokiTsuchiya\BEARAgUi\Event\RunFinished;
 use NaokiTsuchiya\BEARAgUi\Event\RunStarted;
 use NaokiTsuchiya\BEARAgUi\Event\TextMessageContent;
@@ -20,6 +18,7 @@ use NaokiTsuchiya\BEARAgUi\Event\ToolCallResult;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallStart;
 use NaokiTsuchiya\BEARAgUi\Tests\Fake\FakeDispatcher;
 use NaokiTsuchiya\BEARAgUi\Tests\Fake\FakeStreamingLlmClient;
+use NaokiTsuchiya\BEARAgUi\Tests\Support\StreamingPipelineFixture;
 use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingDispatcher;
 use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingStreamingLlmClient;
 use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;
@@ -36,6 +35,8 @@ use PHPUnit\Framework\TestCase;
  */
 final class StreamingAgentContractTest extends TestCase
 {
+    use StreamingPipelineFixture;
+
     public function testTextOnlyScenarioYieldsLifecycleAndTextBoundaries(): void
     {
         $llm = new FakeStreamingLlmClient();
@@ -178,7 +179,7 @@ final class StreamingAgentContractTest extends TestCase
         $dispatcher = new FakeDispatcher();
         // Dispatcher must NOT be called for a confirmation-pending tool.
 
-        [$events] = $this->runPipeline($llm, $dispatcher, [$this->tool('writer', confirm: true)], 'do it');
+        [$events] = $this->runPipeline($llm, $dispatcher, [$this->confirmableTool('writer')], 'do it');
 
         $finished = end($events);
         static::assertInstanceOf(RunFinished::class, $finished);
@@ -271,63 +272,5 @@ final class StreamingAgentContractTest extends TestCase
         }
 
         static::assertSame(2, $deltas);
-    }
-
-    /**
-     * @param list<Tool>            $tools
-     *
-     * @return array{0:list<AgUiEventInterface>}
-     */
-    private function runPipeline(
-        FakeStreamingLlmClient $llm,
-        FakeDispatcher $dispatcher,
-        array $tools,
-        string $userMessage,
-    ): array {
-        $registry = new ToolCallRegistry();
-        $agent = new StreamingAgent(
-            new RecordingStreamingLlmClient($llm, $registry),
-            new RecordingDispatcher($dispatcher, $registry),
-            tools: $tools,
-            systemPrompt: '',
-        );
-        $adapter = new AgUiAdapter('t', 'r', $registry);
-
-        $events = [];
-        foreach ($adapter->run($agent->runStream($userMessage)) as $event) {
-            $events[] = $event;
-        }
-
-        return [$events];
-    }
-
-    private function tool(string $name, bool $confirm = false): Tool
-    {
-        return new Tool($name, '', ['type' => 'object', 'properties' => [], 'required' => []], $confirm);
-    }
-
-    /**
-     * @param list<AgUiEventInterface> $events
-     *
-     * @return list<class-string>
-     */
-    private function types(array $events): array
-    {
-        return array_map(static fn($event) => $event::class, $events);
-    }
-
-    /**
-     * @param list<AgUiEventInterface> $events
-     * @param class-string             $class
-     */
-    private function firstOf(array $events, string $class): ?AgUiEventInterface
-    {
-        foreach ($events as $event) {
-            if ($event instanceof $class) {
-                return $event;
-            }
-        }
-
-        return null;
     }
 }

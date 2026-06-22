@@ -9,8 +9,8 @@ use NaokiTsuchiya\BEARAgUi\Event\RunStarted;
 use NaokiTsuchiya\BEARAgUi\Event\TextMessageContent;
 use NaokiTsuchiya\BEARAgUi\Sse\SseEncoder;
 use NaokiTsuchiya\BEARAgUi\Sse\SseResponder;
-use NaokiTsuchiya\BEARAgUi\Sse\SseSinkInterface;
-use Override;
+use NaokiTsuchiya\BEARAgUi\Tests\Support\LoggingSink;
+use NaokiTsuchiya\BEARAgUi\Tests\Support\RecordingSink;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
@@ -58,58 +58,5 @@ final class SseResponderTest extends TestCase
         $responder->respond($events);
 
         static::assertSame(['open', 'yield:a', 'write', 'yield:b', 'write', 'close'], $log);
-    }
-}
-
-final class RecordingSink implements SseSinkInterface
-{
-    /** @var list<int> */
-    public array $opens = [];
-    /** @var list<string> */
-    public array $frames = [];
-    public int $closes = 0;
-
-    #[Override]
-    public function open(int $statusCode): void
-    {
-        $this->opens[] = $statusCode;
-    }
-
-    #[Override]
-    public function write(string $frame): void
-    {
-        $this->frames[] = $frame;
-    }
-
-    #[Override]
-    public function close(): void
-    {
-        $this->closes++;
-    }
-}
-
-final class LoggingSink implements SseSinkInterface
-{
-    /** @param array<int, string> $log shared with the generator under test */
-    public function __construct(
-        private array &$log,
-    ) {}
-
-    #[Override]
-    public function open(int $_statusCode): void
-    {
-        $this->log[] = 'open';
-    }
-
-    #[Override]
-    public function write(string $_frame): void
-    {
-        $this->log[] = 'write';
-    }
-
-    #[Override]
-    public function close(): void
-    {
-        $this->log[] = 'close';
     }
 }

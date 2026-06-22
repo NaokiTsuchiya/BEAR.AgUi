@@ -24,9 +24,9 @@ final class OpenTextMessage
 {
     private ?string $id = null;
 
-    public function __construct(private readonly IdMinter $idMinter)
-    {
-    }
+    public function __construct(
+        private readonly IdMinter $idMinter,
+    ) {}
 
     /**
      * Open the message block if it is not already open, emitting
