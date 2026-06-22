@@ -18,7 +18,7 @@ use function is_array;
 final class Coerce
 {
     /** @return array<string, mixed>|null */
-    public static function assocOrNull(mixed $value): ?array
+    public static function assocOrNull(mixed $value): array|null
     {
         if (!is_array($value)) {
             return null;

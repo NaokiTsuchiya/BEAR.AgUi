@@ -22,7 +22,7 @@ use NaokiTsuchiya\BEARAgUi\Event\TextMessageStart;
  */
 final class OpenTextMessage
 {
-    private ?string $id = null;
+    private string|null $id = null;
 
     public function __construct(
         private readonly IdMinter $idMinter,

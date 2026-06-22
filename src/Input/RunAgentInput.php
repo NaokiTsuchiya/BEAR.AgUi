@@ -49,7 +49,7 @@ final readonly class RunAgentInput
         public array $messages,
         public array $tools = [],
         public array $context = [],
-        public ?array $state = null,
+        public array|null $state = null,
         public array $forwardedProps = [],
         public array $resume = [],
     ) {}

@@ -68,7 +68,7 @@ final class ToolCallRegistry implements ToolCallRecorder, ToolCallView
     }
 
     #[Override]
-    public function nextStarted(): ?StartedToolCall
+    public function nextStarted(): StartedToolCall|null
     {
         if ($this->started === []) {
             return null;
@@ -78,7 +78,7 @@ final class ToolCallRegistry implements ToolCallRecorder, ToolCallView
     }
 
     #[Override]
-    public function resultFor(string $id): ?ToolCallOutcome
+    public function resultFor(string $id): ToolCallOutcome|null
     {
         if (!array_key_exists($id, $this->outcomes)) {
             return null;

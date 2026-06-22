@@ -18,7 +18,7 @@ final readonly class RunError implements AgUiEventInterface
 {
     public function __construct(
         public string $message,
-        public ?string $code = null,
+        public string|null $code = null,
     ) {}
 
     #[Override]

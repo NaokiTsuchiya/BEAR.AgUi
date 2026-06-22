@@ -73,7 +73,7 @@ trait StreamingPipelineFixture
      * @param list<AgUiEventInterface> $events
      * @param class-string             $class
      */
-    private function firstOf(array $events, string $class): ?AgUiEventInterface
+    private function firstOf(array $events, string $class): AgUiEventInterface|null
     {
         foreach ($events as $event) {
             if ($event instanceof $class) {

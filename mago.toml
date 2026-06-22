@@ -15,6 +15,7 @@ literal-separator = true
 
 [formatter]
 preset = "default"
+null-type-hint = "NullPipeLast"
 
 [linter]
 integrations = ["phpunit"]

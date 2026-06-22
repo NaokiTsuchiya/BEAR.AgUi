@@ -64,7 +64,7 @@ final class AgUiAdapter
         private readonly string $threadId,
         private readonly string $runId,
         private readonly ToolCallView $registry,
-        private readonly ?LoggerInterface $logger = null,
+        private readonly LoggerInterface|null $logger = null,
     ) {
         $this->idMinter = new IdMinter();
         $this->openMessage = new OpenTextMessage($this->idMinter);
