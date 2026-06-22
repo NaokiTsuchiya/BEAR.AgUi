@@ -39,7 +39,7 @@ trait StreamingPipelineFixture
             tools: $tools,
             systemPrompt: '',
         );
-        $adapter = new AgUiAdapter('t', 'r', $registry);
+        $adapter = new AgUiAdapter('t', 'r', $registry, null);
 
         $events = [];
         foreach ($adapter->run($agent->runStream($userMessage)) as $event) {

@@ -24,7 +24,7 @@ final class SseResponder
     ) {}
 
     /** @param iterable<AgUiEventInterface> $events */
-    public function respond(iterable $events, int $statusCode = 200): void
+    public function respond(iterable $events, int $statusCode): void
     {
         $this->sink->open($statusCode);
 

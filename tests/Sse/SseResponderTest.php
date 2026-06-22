@@ -25,7 +25,7 @@ final class SseResponderTest extends TestCase
             new TextMessageContent('m-1', 'hi'),
         ];
 
-        $responder->respond($events);
+        $responder->respond($events, 200);
 
         static::assertSame([200], $sink->opens);
         static::assertSame(1, $sink->closes);
@@ -53,7 +53,7 @@ final class SseResponderTest extends TestCase
         $sink = new LoggingSink($log);
         $responder = new SseResponder(new SseEncoder(), $sink);
 
-        $responder->respond($events);
+        $responder->respond($events, 200);
 
         static::assertSame(['open', 'yield:a', 'write', 'yield:b', 'write', 'close'], $log);
     }

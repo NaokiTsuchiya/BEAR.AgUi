@@ -24,12 +24,12 @@ final readonly class RunOutcome implements JsonSerializable
     /** @param list<Interrupt> $interrupts */
     private function __construct(
         public string $type,
-        public array $interrupts = [],
+        public array $interrupts,
     ) {}
 
     public static function success(): self
     {
-        return new self(self::TYPE_SUCCESS);
+        return new self(self::TYPE_SUCCESS, []);
     }
 
     /** @param list<Interrupt> $interrupts non-empty per AG-UI spec */
