@@ -11,7 +11,6 @@ use NaokiTsuchiya\BEARAgUi\Event\Interrupt;
 use NaokiTsuchiya\BEARAgUi\Event\RunError;
 use NaokiTsuchiya\BEARAgUi\Event\RunFinished;
 use NaokiTsuchiya\BEARAgUi\Event\RunStarted;
-use NaokiTsuchiya\BEARAgUi\Event\TextMessageContent;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallArgs;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallEnd;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallResult;
@@ -123,8 +122,7 @@ final class AgUiAdapter
     /** @return Generator<int, AgUiEventInterface, mixed, void> */
     private function emitTextDelta(AgentEvent $event): Generator
     {
-        yield from $this->openMessage->ensure();
-        yield new TextMessageContent($this->openMessage->requireId(), $this->dataString($event, 'text'));
+        yield from $this->openMessage->emitContent($this->dataString($event, 'text'));
     }
 
     /** @return Generator<int, AgUiEventInterface, mixed, void> */
