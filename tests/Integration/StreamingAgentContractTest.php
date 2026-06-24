@@ -23,6 +23,7 @@ use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingDispatcher;
 use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingStreamingLlmClient;
 use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 /**
  * End-to-end contract tests that drive a REAL StreamingAgent through the
@@ -254,7 +255,7 @@ final class StreamingAgentContractTest extends TestCase
             tools: [],
             systemPrompt: '',
         );
-        $adapter = new AgUiAdapter('t', 'r', $registry, null);
+        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
 
         $deltas = 0;
         foreach ($adapter->run($agent->runStream('hi')) as $event) {

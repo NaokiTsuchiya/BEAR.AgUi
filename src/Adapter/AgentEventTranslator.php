@@ -46,7 +46,7 @@ final class AgentEventTranslator
         private readonly string $threadId,
         private readonly string $runId,
         private readonly ToolCallView $registry,
-        private readonly LoggerInterface|null $logger,
+        private readonly LoggerInterface $logger,
     ) {}
 
     /**
@@ -168,7 +168,7 @@ final class AgentEventTranslator
     {
         yield from $this->closeOpenMessage($state);
 
-        $this->logger?->error('AgUiAdapter received error AgentEvent: {message}', [
+        $this->logger->error('AgUiAdapter received error AgentEvent: {message}', [
             'message' => $this->dataString($event, 'message'),
         ]);
         yield new RunError('Internal agent error.', 'AGENT_ERROR');

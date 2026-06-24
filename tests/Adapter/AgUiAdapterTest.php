@@ -23,6 +23,7 @@ use NaokiTsuchiya\BEARAgUi\Support\RecordingLogger;
 use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use RuntimeException;
 
 #[CoversClass(AgUiAdapter::class)]
@@ -31,7 +32,7 @@ final class AgUiAdapterTest extends TestCase
     public function testTextDeltaWrappedByStartAndEndAroundRun(): void
     {
         $registry = new ToolCallRegistry();
-        $adapter = new AgUiAdapter('t', 'r', $registry, null);
+        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
 
         $events = $this->collect($adapter->run($this->generator([
             AgentEvent::textDelta('hi'),
@@ -62,7 +63,7 @@ final class AgUiAdapterTest extends TestCase
         $registry->appendInput('call-1', '{"q":"hi"}');
         $registry->recordResult(new ToolCall('call-1', 'search', ['q' => 'hi']), ToolResult::success('call-1', 'hits'));
 
-        $adapter = new AgUiAdapter('t', 'r', $registry, null);
+        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
 
         $events = $this->collect($adapter->run($this->generator([
             AgentEvent::toolStart('search'),
@@ -96,7 +97,7 @@ final class AgUiAdapterTest extends TestCase
         $registry->recordResult(new ToolCall('call-1', 'a', ['x' => 1]), ToolResult::success('call-1', 'A'));
         $registry->recordResult(new ToolCall('call-2', 'b', ['y' => 2]), ToolResult::success('call-2', 'B'));
 
-        $adapter = new AgUiAdapter('t', 'r', $registry, null);
+        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
 
         $events = $this->collect($adapter->run($this->generator([
             AgentEvent::toolStart('a'),
@@ -139,7 +140,7 @@ final class AgUiAdapterTest extends TestCase
         $registry->recordStart('call-1', 'unregistered');
         // Intentionally no recordResult — simulates unregistered tool branch.
 
-        $adapter = new AgUiAdapter('t', 'r', $registry, null);
+        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
 
         $events = $this->collect($adapter->run($this->generator([
             AgentEvent::toolStart('unregistered'),
@@ -162,7 +163,7 @@ final class AgUiAdapterTest extends TestCase
         $registry->recordStart('call-1', 'search');
         $registry->recordResult(new ToolCall('call-1', 'search', []), ToolResult::success('call-1', 'ok'));
 
-        $adapter = new AgUiAdapter('t', 'r', $registry, null);
+        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
 
         $events = $this->collect($adapter->run($this->generator([
             AgentEvent::textDelta('thinking…'),
@@ -180,7 +181,7 @@ final class AgUiAdapterTest extends TestCase
     public function testConfirmationRequiredTerminatesRunWithInterruptOutcome(): void
     {
         $registry = new ToolCallRegistry();
-        $adapter = new AgUiAdapter('t', 'r', $registry, null);
+        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
 
         $events = $this->collect($adapter->run($this->generator([
             AgentEvent::confirmationRequired('writer', 'call-9', ['path' => '/x'], 'About to write /x'),

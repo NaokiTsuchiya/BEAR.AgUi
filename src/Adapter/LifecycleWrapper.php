@@ -22,7 +22,7 @@ use Throwable;
  * Post-conditions on the wrapped output:
  *  - first event is always {@see RunStarted};
  *  - if the inner stream raises a {@see Throwable}, the wrapper logs the
- *    exception via the optional logger and yields a generic {@see RunError};
+ *    exception via the injected logger and yields a generic {@see RunError};
  *  - if the inner stream produced no terminal event, the wrapper appends
  *    {@see RunFinished::success()}.
  *
@@ -31,12 +31,12 @@ use Throwable;
  *
  * @internal
  */
-final class LifecycleWrapper
+final readonly class LifecycleWrapper
 {
     public function __construct(
-        private readonly string $threadId,
-        private readonly string $runId,
-        private readonly LoggerInterface|null $logger,
+        private string $threadId,
+        private string $runId,
+        private LoggerInterface $logger,
     ) {}
 
     /**
@@ -49,20 +49,16 @@ final class LifecycleWrapper
         yield new RunStarted($this->threadId, $this->runId);
 
         try {
-            $sawTerminal = false;
             foreach ($inner as $event) {
                 yield $event;
                 if ($event instanceof RunFinished || $event instanceof RunError) {
-                    $sawTerminal = true;
                     return;
                 }
             }
 
-            if (!$sawTerminal) {
-                yield RunFinished::success($this->threadId, $this->runId);
-            }
+            yield RunFinished::success($this->threadId, $this->runId);
         } catch (Throwable $e) {
-            $this->logger?->error('AgUiAdapter caught throwable while consuming agent stream: {message}', [
+            $this->logger->error('AgUiAdapter caught throwable while consuming agent stream: {message}', [
                 'message' => $e->getMessage(),
                 'exception' => $e,
             ]);

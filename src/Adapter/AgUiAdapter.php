@@ -31,7 +31,7 @@ final class AgUiAdapter
         private readonly string $threadId,
         private readonly string $runId,
         private readonly ToolCallView $registry,
-        private readonly LoggerInterface|null $logger,
+        private readonly LoggerInterface $logger,
     ) {}
 
     /**
@@ -51,7 +51,7 @@ final class AgUiAdapter
             // catch every throwable from the translator and map it to
             // RUN_ERROR. This branch only fires if the wrapper itself
             // breaks its contract.
-            $this->logger?->error('AgUiAdapter caught throwable past LifecycleWrapper: {message}', [
+            $this->logger->error('AgUiAdapter caught throwable past LifecycleWrapper: {message}', [
                 'message' => $e->getMessage(),
                 'exception' => $e,
             ]);

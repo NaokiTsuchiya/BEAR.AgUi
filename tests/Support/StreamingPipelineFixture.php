@@ -13,6 +13,7 @@ use NaokiTsuchiya\BEARAgUi\Fake\FakeStreamingLlmClient;
 use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingDispatcher;
 use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingStreamingLlmClient;
 use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;
+use Psr\Log\NullLogger;
 
 /**
  * Shared helpers for end-to-end pipeline tests that drive a real
@@ -39,7 +40,7 @@ trait StreamingPipelineFixture
             tools: $tools,
             systemPrompt: '',
         );
-        $adapter = new AgUiAdapter('t', 'r', $registry, null);
+        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
 
         $events = [];
         foreach ($adapter->run($agent->runStream($userMessage)) as $event) {
