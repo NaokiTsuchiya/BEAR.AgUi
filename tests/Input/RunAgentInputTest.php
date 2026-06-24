@@ -1,0 +1,153 @@
+<?php
+
+declare(strict_types=1);
+
+namespace NaokiTsuchiya\BEARAgUi\Input;
+
+use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(RunAgentInput::class)]
+final class RunAgentInputTest extends TestCase
+{
+    public function testFromJsonParsesMinimalValidBody(): void
+    {
+        $body = '{"threadId":"t-1","runId":"r-1","messages":[{"role":"user","content":"hi"}]}';
+
+        $input = RunAgentInput::fromJson($body);
+
+        static::assertSame('t-1', $input->threadId);
+        static::assertSame('r-1', $input->runId);
+        static::assertSame([['role' => 'user', 'content' => 'hi']], $input->messages);
+        static::assertSame([], $input->tools);
+        static::assertSame([], $input->resume);
+        static::assertNull($input->state);
+    }
+
+    public function testFromJsonAcceptsOptionalFields(): void
+    {
+        $body =
+            '{"threadId":"t","runId":"r","messages":[{"role":"user","content":"hi"}],'
+            . '"tools":[{"name":"search","description":"","parameters":{}}],'
+            . '"context":[{"description":"d","value":"v"}],'
+            . '"state":{"k":"v"},"forwardedProps":{"a":1},'
+            . '"resume":[{"interruptId":"i-1","status":"resolved"}]}';
+
+        $input = RunAgentInput::fromJson($body);
+
+        static::assertSame(['search'], $input->declaredToolNames());
+        static::assertSame(['k' => 'v'], $input->state);
+        static::assertSame(['a' => 1], $input->forwardedProps);
+        static::assertCount(1, $input->resume);
+        static::assertSame('i-1', $input->resume[0]['interruptId']);
+    }
+
+    public function testFromJsonRejectsNonObjectBody(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('must be a JSON object');
+
+        RunAgentInput::fromJson('"not an object"');
+    }
+
+    public function testFromJsonRejectsMissingThreadId(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Missing or invalid 'threadId'");
+
+        RunAgentInput::fromJson('{"runId":"r","messages":[]}');
+    }
+
+    public function testFromJsonRejectsEmptyRunId(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Missing or invalid 'runId'");
+
+        RunAgentInput::fromJson('{"threadId":"t","runId":"","messages":[]}');
+    }
+
+    public function testFromJsonRejectsMissingMessages(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Missing or invalid 'messages'");
+
+        RunAgentInput::fromJson('{"threadId":"t","runId":"r"}');
+    }
+
+    public function testLastUserMessageReturnsMostRecent(): void
+    {
+        $input = new RunAgentInput(
+            threadId: 't',
+            runId: 'r',
+            messages: [
+                ['role' => 'user', 'content' => 'first'],
+                ['role' => 'assistant', 'content' => 'reply'],
+                ['role' => 'user', 'content' => 'second'],
+            ],
+            tools: [],
+            context: [],
+            state: null,
+            forwardedProps: [],
+            resume: [],
+        );
+
+        static::assertSame('second', $input->lastUserMessage());
+    }
+
+    public function testLastUserMessageSkipsNonUserMessages(): void
+    {
+        $input = new RunAgentInput(
+            threadId: 't',
+            runId: 'r',
+            messages: [
+                ['role' => 'user', 'content' => 'hi'],
+                ['role' => 'tool', 'content' => 'result'],
+            ],
+            tools: [],
+            context: [],
+            state: null,
+            forwardedProps: [],
+            resume: [],
+        );
+
+        static::assertSame('hi', $input->lastUserMessage());
+    }
+
+    public function testLastUserMessageThrowsWhenAbsent(): void
+    {
+        $input = new RunAgentInput(
+            threadId: 't',
+            runId: 'r',
+            messages: [['role' => 'assistant', 'content' => 'reply']],
+            tools: [],
+            context: [],
+            state: null,
+            forwardedProps: [],
+            resume: [],
+        );
+
+        $this->expectException(InvalidArgumentException::class);
+        $input->lastUserMessage();
+    }
+
+    public function testDeclaredToolNamesSkipsEntriesMissingName(): void
+    {
+        $input = new RunAgentInput(
+            threadId: 't',
+            runId: 'r',
+            messages: [],
+            tools: [
+                ['name' => 'search'],
+                ['description' => 'no name here'],
+                ['name' => 'fetch'],
+            ],
+            context: [],
+            state: null,
+            forwardedProps: [],
+            resume: [],
+        );
+
+        static::assertSame(['search', 'fetch'], $input->declaredToolNames());
+    }
+}

@@ -15,6 +15,7 @@ literal-separator = true
 
 [formatter]
 preset = "default"
+null-type-hint = "NullPipeLast"
 
 [linter]
 integrations = ["phpunit"]
@@ -52,3 +53,51 @@ allow-side-effects-in-conditions = false
 
 unchecked-exceptions = ["Error", "LogicException", "PHPUnit\\Framework\\Exception"]
 unchecked-exception-classes = []
+
+# Architecture boundaries: lock the dependency rules in docs/architecture.md
+# §1 / §8 mechanically. The Event/ and Sse/ layers must never reach into
+# bear/tool-use; only the ToolUse/ and Adapter/ layers may bind to it.
+[guard]
+mode = "perimeter"
+excludes = ["tests/**"]
+
+[guard.perimeter]
+layers.event = ["NaokiTsuchiya\\BEARAgUi\\Event\\"]
+layers.sse = ["NaokiTsuchiya\\BEARAgUi\\Sse\\"]
+layers.input = ["NaokiTsuchiya\\BEARAgUi\\Input\\"]
+layers.tooluse = ["NaokiTsuchiya\\BEARAgUi\\ToolUse\\"]
+layers.adapter = ["NaokiTsuchiya\\BEARAgUi\\Adapter\\"]
+layers.bear-tool-use = ["BEAR\\ToolUse\\"]
+
+[[guard.perimeter.rules]]
+# Event/ is a pure AG-UI serialization layer: no internal cross-layer deps,
+# and explicitly must not touch BEAR\ToolUse.
+namespace = "NaokiTsuchiya\\BEARAgUi\\Event\\"
+permit = ["@native", "@self"]
+
+[[guard.perimeter.rules]]
+# Sse/ frames Event/ instances; it cannot reach BEAR\ToolUse either.
+namespace = "NaokiTsuchiya\\BEARAgUi\\Sse\\"
+permit = ["@native", "@self", "NaokiTsuchiya\\BEARAgUi\\Event\\"]
+
+[[guard.perimeter.rules]]
+# Input/ is host-facing input boundary; pure AG-UI, no ToolUse.
+namespace = "NaokiTsuchiya\\BEARAgUi\\Input\\"
+permit = ["@native", "@self"]
+
+[[guard.perimeter.rules]]
+# ToolUse/ is the enrichment shim — explicitly bound to BEAR\ToolUse.
+namespace = "NaokiTsuchiya\\BEARAgUi\\ToolUse\\"
+permit = ["@native", "@self", "BEAR\\ToolUse\\"]
+
+[[guard.perimeter.rules]]
+# Adapter/ converts AgentEvent → AG-UI events using the registry.
+namespace = "NaokiTsuchiya\\BEARAgUi\\Adapter\\"
+permit = [
+    "@native",
+    "@self",
+    "Psr\\Log\\",
+    "NaokiTsuchiya\\BEARAgUi\\Event\\",
+    "NaokiTsuchiya\\BEARAgUi\\ToolUse\\",
+    "BEAR\\ToolUse\\",
+]

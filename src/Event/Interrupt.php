@@ -1,0 +1,67 @@
+<?php
+
+declare(strict_types=1);
+
+namespace NaokiTsuchiya\BEARAgUi\Event;
+
+use JsonSerializable;
+use Override;
+
+/**
+ * AG-UI Interrupt entry: an item inside RunFinished.outcome.interrupts[].
+ *
+ * `id` and `reason` are required; everything else is optional and is omitted
+ * from the serialized JSON when unset.
+ *
+ * @api
+ */
+final readonly class Interrupt implements JsonSerializable
+{
+    /**
+     * @param array<string, mixed>|null $responseSchema
+     *
+     * @mago-expect lint:excessive-parameter-list
+     *
+     * The constructor mirrors the AG-UI Interrupt wire schema (id, reason,
+     * message?, toolCallId?, responseSchema?, expiresAt?, metadata?); breaking
+     * it into sub-DTOs would drift from the spec.
+     */
+    public function __construct(
+        public string $id,
+        public string $reason,
+        public string|null $message,
+        public string|null $toolCallId,
+        public array|null $responseSchema,
+        public string|null $expiresAt,
+        /** @var array<string, mixed>|null */
+        public array|null $metadata,
+    ) {}
+
+    /** @return array<string, mixed> */
+    #[Override]
+    public function jsonSerialize(): array
+    {
+        $data = ['id' => $this->id, 'reason' => $this->reason];
+        if ($this->message !== null) {
+            $data['message'] = $this->message;
+        }
+
+        if ($this->toolCallId !== null) {
+            $data['toolCallId'] = $this->toolCallId;
+        }
+
+        if ($this->responseSchema !== null) {
+            $data['responseSchema'] = $this->responseSchema;
+        }
+
+        if ($this->expiresAt !== null) {
+            $data['expiresAt'] = $this->expiresAt;
+        }
+
+        if ($this->metadata !== null) {
+            $data['metadata'] = $this->metadata;
+        }
+
+        return $data;
+    }
+}

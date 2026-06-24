@@ -17,7 +17,7 @@
 
 ## M0 — パッケージ土台：移植 + ToolUse 接続（ADR 0001/0002/0006）
 
-> **詳細タスク**: [`tasks-m0.md`](tasks-m0.md)（ファイル/クラス/メソッド粒度、着手順）
+> **詳細タスク**: [`done/tasks-m0.md`](done/tasks-m0.md)（完了済み）
 
 poc の実証済み層を本体 `src/`・`tests/` へ移植し、実 `bear/tool-use` に接続して全グリーンにする。
 
