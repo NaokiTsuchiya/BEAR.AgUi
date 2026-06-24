@@ -87,8 +87,17 @@ permit = ["@native", "@self"]
 
 [[guard.perimeter.rules]]
 # ToolUse/ is the enrichment shim — explicitly bound to BEAR\ToolUse.
+# Input/ is allowed so MessageHistoryMapper can consume the typed AG-UI
+# message graph (Message variants, AssistantToolCall, etc.) without
+# re-walking raw arrays.
 namespace = "NaokiTsuchiya\\BEARAgUi\\ToolUse\\"
-permit = ["@native", "@self", "BEAR\\ToolUse\\"]
+permit = [
+    "@native",
+    "@self",
+    "BEAR\\ToolUse\\",
+    "NaokiTsuchiya\\BEARAgUi\\Input\\",
+    "NaokiTsuchiya\\BEARAgUi\\Input\\Message\\",
+]
 
 [[guard.perimeter.rules]]
 # Adapter/ converts AgentEvent → AG-UI events using the registry.
