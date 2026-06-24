@@ -4,150 +4,131 @@ declare(strict_types=1);
 
 namespace NaokiTsuchiya\BEARAgUi\Input;
 
-use InvalidArgumentException;
+use NaokiTsuchiya\BEARAgUi\Input\Message\AssistantMessage;
+use NaokiTsuchiya\BEARAgUi\Input\Message\Message;
+use NaokiTsuchiya\BEARAgUi\Input\Message\ToolMessage;
+use NaokiTsuchiya\BEARAgUi\Input\Message\ToolOutcome;
+use NaokiTsuchiya\BEARAgUi\Input\Message\UserMessage;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function array_map;
+
+/**
+ * @mago-expect lint:too-many-methods
+ *
+ * One method per behaviour scenario is intentional; merging via data
+ * providers would obscure which contract is failing.
+ */
 #[CoversClass(RunAgentInput::class)]
 final class RunAgentInputTest extends TestCase
 {
-    public function testFromJsonParsesMinimalValidBody(): void
-    {
-        $body = '{"threadId":"t-1","runId":"r-1","messages":[{"role":"user","content":"hi"}]}';
-
-        $input = RunAgentInput::fromJson($body);
-
-        static::assertSame('t-1', $input->threadId);
-        static::assertSame('r-1', $input->runId);
-        static::assertSame([['role' => 'user', 'content' => 'hi']], $input->messages);
-        static::assertSame([], $input->tools);
-        static::assertSame([], $input->resume);
-        static::assertNull($input->state);
-    }
-
-    public function testFromJsonAcceptsOptionalFields(): void
-    {
-        $body =
-            '{"threadId":"t","runId":"r","messages":[{"role":"user","content":"hi"}],'
-            . '"tools":[{"name":"search","description":"","parameters":{}}],'
-            . '"context":[{"description":"d","value":"v"}],'
-            . '"state":{"k":"v"},"forwardedProps":{"a":1},'
-            . '"resume":[{"interruptId":"i-1","status":"resolved"}]}';
-
-        $input = RunAgentInput::fromJson($body);
-
-        static::assertSame(['search'], $input->declaredToolNames());
-        static::assertSame(['k' => 'v'], $input->state);
-        static::assertSame(['a' => 1], $input->forwardedProps);
-        static::assertCount(1, $input->resume);
-        static::assertSame('i-1', $input->resume[0]['interruptId']);
-    }
-
-    public function testFromJsonRejectsNonObjectBody(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('must be a JSON object');
-
-        RunAgentInput::fromJson('"not an object"');
-    }
-
-    public function testFromJsonRejectsMissingThreadId(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage("Missing or invalid 'threadId'");
-
-        RunAgentInput::fromJson('{"runId":"r","messages":[]}');
-    }
-
-    public function testFromJsonRejectsEmptyRunId(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage("Missing or invalid 'runId'");
-
-        RunAgentInput::fromJson('{"threadId":"t","runId":"","messages":[]}');
-    }
-
-    public function testFromJsonRejectsMissingMessages(): void
-    {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage("Missing or invalid 'messages'");
-
-        RunAgentInput::fromJson('{"threadId":"t","runId":"r"}');
-    }
-
     public function testLastUserMessageReturnsMostRecent(): void
     {
-        $input = new RunAgentInput(
-            threadId: 't',
-            runId: 'r',
-            messages: [
-                ['role' => 'user', 'content' => 'first'],
-                ['role' => 'assistant', 'content' => 'reply'],
-                ['role' => 'user', 'content' => 'second'],
-            ],
-            tools: [],
-            context: [],
-            state: null,
-            forwardedProps: [],
-            resume: [],
-        );
+        $input = self::makeInput([
+            new UserMessage('m1', 'first'),
+            new AssistantMessage('m2', 'reply', []),
+            new UserMessage('m3', 'second'),
+        ]);
 
         static::assertSame('second', $input->lastUserMessage());
     }
 
     public function testLastUserMessageSkipsNonUserMessages(): void
     {
-        $input = new RunAgentInput(
-            threadId: 't',
-            runId: 'r',
-            messages: [
-                ['role' => 'user', 'content' => 'hi'],
-                ['role' => 'tool', 'content' => 'result'],
-            ],
-            tools: [],
-            context: [],
-            state: null,
-            forwardedProps: [],
-            resume: [],
-        );
+        $input = self::makeInput([
+            new UserMessage('m1', 'hi'),
+            new ToolMessage('m2', 'call-1', ToolOutcome::success('result')),
+        ]);
 
         static::assertSame('hi', $input->lastUserMessage());
     }
 
-    public function testLastUserMessageThrowsWhenAbsent(): void
+    public function testLastUserMessageReturnsParseErrorWhenAbsent(): void
     {
-        $input = new RunAgentInput(
-            threadId: 't',
-            runId: 'r',
-            messages: [['role' => 'assistant', 'content' => 'reply']],
-            tools: [],
-            context: [],
-            state: null,
-            forwardedProps: [],
-            resume: [],
-        );
+        $input = self::makeInput([new AssistantMessage('m1', 'reply', [])]);
 
-        $this->expectException(InvalidArgumentException::class);
-        $input->lastUserMessage();
+        $result = $input->lastUserMessage();
+
+        static::assertInstanceOf(ParseError::class, $result);
+        static::assertStringContainsString('No user message', $result->message);
     }
 
-    public function testDeclaredToolNamesSkipsEntriesMissingName(): void
+    public function testLastUserMessageReturnsParseErrorWhenTextIsEmpty(): void
     {
-        $input = new RunAgentInput(
+        $input = self::makeInput([new UserMessage('m1', '')]);
+
+        $result = $input->lastUserMessage();
+
+        static::assertInstanceOf(ParseError::class, $result);
+        static::assertStringContainsString('no text content', $result->message);
+    }
+
+    public function testHistoryMessagesDropsLastUser(): void
+    {
+        $input = self::makeInput([
+            new UserMessage('m1', 'first'),
+            new AssistantMessage('m2', 'reply', []),
+            new UserMessage('m3', 'second'),
+        ]);
+
+        static::assertSame(['user', 'assistant'], self::rolesOf($input->historyMessages()));
+    }
+
+    public function testHistoryMessagesKeepsTrailingNonUser(): void
+    {
+        $input = self::makeInput([
+            new UserMessage('m1', 'hi'),
+            new AssistantMessage('m2', 'reply', []),
+            new UserMessage('m3', 'follow-up'),
+            new ToolMessage('m4', 'call-1', ToolOutcome::success('result')),
+        ]);
+
+        static::assertSame(['user', 'assistant'], self::rolesOf($input->historyMessages()));
+    }
+
+    public function testHistoryMessagesReturnsAllWhenNoUser(): void
+    {
+        $input = self::makeInput([new AssistantMessage('m1', 'reply', [])]);
+
+        static::assertSame(['assistant'], self::rolesOf($input->historyMessages()));
+    }
+
+    public function testDeclaredToolNamesProjectsToolNames(): void
+    {
+        $input = self::makeInput(messages: [], tools: [
+            new Tool('search', '', []),
+            new Tool('fetch', '', []),
+        ]);
+
+        static::assertSame(['search', 'fetch'], $input->declaredToolNames());
+    }
+
+    /**
+     * @param list<Message> $messages
+     * @param list<Tool>    $tools
+     */
+    private static function makeInput(array $messages, array $tools = []): RunAgentInput
+    {
+        return new RunAgentInput(
             threadId: 't',
             runId: 'r',
-            messages: [],
-            tools: [
-                ['name' => 'search'],
-                ['description' => 'no name here'],
-                ['name' => 'fetch'],
-            ],
+            messages: $messages,
+            tools: $tools,
             context: [],
             state: null,
             forwardedProps: [],
             resume: [],
         );
+    }
 
-        static::assertSame(['search', 'fetch'], $input->declaredToolNames());
+    /**
+     * @param list<Message> $messages
+     *
+     * @return list<string>
+     */
+    private static function rolesOf(array $messages): array
+    {
+        return array_map(static fn(Message $m): string => $m->role(), $messages);
     }
 }

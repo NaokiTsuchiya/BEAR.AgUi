@@ -1,0 +1,14 @@
+{
+  "threadId": "t",
+  "runId": "r",
+  "messages": [
+    {
+      "id": "m-1",
+      "role": "user",
+      "content": [
+        {"type": "image", "url": "http://example/x.png"},
+        {"type": "text", "text": "describe this"}
+      ]
+    }
+  ]
+}

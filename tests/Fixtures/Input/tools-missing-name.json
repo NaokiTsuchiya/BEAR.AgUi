@@ -1,0 +1,11 @@
+{
+  "threadId": "t",
+  "runId": "r",
+  "messages": [
+    {"id": "m-1", "role": "user", "content": "hi"}
+  ],
+  "tools": [
+    {"name": "search", "description": "", "parameters": {}},
+    {"description": "no name here"}
+  ]
+}

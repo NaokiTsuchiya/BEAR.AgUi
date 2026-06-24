@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace NaokiTsuchiya\BEARAgUi\Input;
 
-use InvalidArgumentException;
-use JsonException;
+use NaokiTsuchiya\BEARAgUi\Input\Message\Message;
+use NaokiTsuchiya\BEARAgUi\Input\Message\UserMessage;
 
-use function count;
-use function is_string;
+use function array_map;
+use function array_reverse;
+use function array_slice;
 
 /**
  * AG-UI RunAgentInput as a typed value object.
@@ -22,20 +23,24 @@ use function is_string;
  * stream starts. A failure here is a connection-level error (HTTP 400) —
  * distinct from a RUN_ERROR mid-stream.
  *
- * v1 reads only threadId / runId / messages / tools. state, forwardedProps
- * and resume are accepted leniently to stay forward-compatible.
+ * Build instances via {@see RunAgentInputParser::parse()} — the parser is
+ * the single place that converts the AG-UI wire arrays into the typed VO
+ * graph this class exposes. Consumers iterate over `list<Message>` /
+ * `list<Tool>` / `list<Context>` / `list<Resume>` instead of poking at
+ * untyped arrays. `state` and `forwardedProps` stay as associative arrays
+ * because they are intentionally free-form per the spec.
  *
  * @api
  */
 final readonly class RunAgentInput
 {
     /**
-     * @param list<array<string, mixed>> $messages
-     * @param list<array<string, mixed>> $tools
-     * @param list<array<string, mixed>> $context
-     * @param array<string, mixed>|null  $state
-     * @param array<string, mixed>       $forwardedProps
-     * @param list<array<string, mixed>> $resume
+     * @param list<Message>             $messages
+     * @param list<Tool>                $tools
+     * @param list<Context>             $context
+     * @param array<string, mixed>|null $state
+     * @param array<string, mixed>      $forwardedProps
+     * @param list<Resume>              $resume
      *
      * @mago-expect lint:excessive-parameter-list
      *
@@ -55,58 +60,74 @@ final readonly class RunAgentInput
     ) {}
 
     /**
-     * Build + validate from a raw JSON request body.
+     * Text of the last user message — what ToolUse runStream() takes.
      *
-     * Thin facade over {@see RunAgentInputParser::parse()} — kept on this
-     * class so callers (and tests) have one obvious entry point.
-     *
-     * @throws InvalidArgumentException on malformed input (→ HTTP 400 upstream).
-     * @throws JsonException when the body is not valid JSON.
+     * Walks `messages[]` back-to-front, stops at the first {@see UserMessage}
+     * and projects its content via {@see UserMessage::text()} (multimodal
+     * parts are dropped per D17). Returns a {@see ParseError} when no user
+     * message exists or its extracted text is empty — callers translate that
+     * to HTTP 400 (ADR 0001) before opening the stream.
      */
-    public static function fromJson(string $body): self
+    public function lastUserMessage(): string|ParseError
     {
-        return (new RunAgentInputParser())->parse($body);
+        foreach (array_reverse($this->messages) as $message) {
+            if (!$message instanceof UserMessage) {
+                continue;
+            }
+
+            if ($message->text === '') {
+                return new ParseError('User message has no text content.');
+            }
+
+            return $message->text;
+        }
+
+        return new ParseError('No user message found in messages[].');
     }
 
     /**
-     * The text of the last user message — what ToolUse runStream() takes.
+     * Conversation history minus the last user message — input for
+     * {@see \NaokiTsuchiya\BEARAgUi\ToolUse\MessageHistoryMapper}.
      *
-     * Full message-history mapping (multimodal content, tool messages) is
-     * scoped to M1 (see decisions D15/D17).
+     * The last user message is the one the agent is responding to *this*
+     * run; the rest is the prior turns the agent needs as seed for ReAct
+     * continuity (D15). If no user message is present, returns the whole
+     * list — `lastUserMessage()` already raises 400 upstream in that case.
      *
-     * @throws InvalidArgumentException when no user message with string content exists.
+     * @return list<Message>
      */
-    public function lastUserMessage(): string
+    public function historyMessages(): array
     {
-        for ($i = count($this->messages) - 1; $i >= 0; $i--) {
-            $message = $this->messages[$i];
-            $content = $message['content'] ?? null;
-            if (($message['role'] ?? null) === 'user' && is_string($content)) {
-                return $content;
-            }
+        $lastUser = $this->findLastUserIndex();
+        if ($lastUser === null) {
+            return $this->messages;
         }
 
-        throw new InvalidArgumentException('No user message with string content found in messages[].');
+        return array_slice($this->messages, 0, $lastUser);
+    }
+
+    private function findLastUserIndex(): int|null
+    {
+        $lastIndex = null;
+        foreach ($this->messages as $index => $message) {
+            if (!$message instanceof UserMessage) {
+                continue;
+            }
+
+            $lastIndex = $index;
+        }
+
+        return $lastIndex;
     }
 
     /**
      * Tool names the client declared as available this run.
-     * Maps to ToolUse AgentOptions::withTools($names).
+     * Intersected with the agent's known tools by {@see \NaokiTsuchiya\BEARAgUi\AgUiRunner}.
      *
      * @return list<string>
      */
     public function declaredToolNames(): array
     {
-        $names = [];
-        foreach ($this->tools as $tool) {
-            $name = $tool['name'] ?? null;
-            if (!is_string($name)) {
-                continue;
-            }
-
-            $names[] = $name;
-        }
-
-        return $names;
+        return array_map(static fn(Tool $tool): string => $tool->name, $this->tools);
     }
 }
