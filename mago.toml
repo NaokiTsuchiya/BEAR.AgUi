@@ -62,6 +62,9 @@ mode = "perimeter"
 excludes = ["tests/**"]
 
 [guard.perimeter]
+# AgUiRunner (root namespace) is the composition root; the more specific
+# sub-namespace layers below win for everything under it.
+layers.facade = ["NaokiTsuchiya\\BEARAgUi\\"]
 layers.event = ["NaokiTsuchiya\\BEARAgUi\\Event\\"]
 layers.sse = ["NaokiTsuchiya\\BEARAgUi\\Sse\\"]
 layers.input = ["NaokiTsuchiya\\BEARAgUi\\Input\\"]
@@ -109,4 +112,20 @@ permit = [
     "NaokiTsuchiya\\BEARAgUi\\Event\\",
     "NaokiTsuchiya\\BEARAgUi\\ToolUse\\",
     "BEAR\\ToolUse\\",
+]
+
+[[guard.perimeter.rules]]
+# AgUiRunner is the facade that assembles the per-run pipeline; it may
+# reach every internal layer (architecture §1: AgUiRunner → {Input,
+# Adapter, ToolUse, Sse}) plus BEAR\ToolUse (AgentOptions) and Psr\Log.
+namespace = "NaokiTsuchiya\\BEARAgUi\\"
+permit = [
+    "@native",
+    "@self",
+    "Psr\\Log\\",
+    "BEAR\\ToolUse\\",
+    "NaokiTsuchiya\\BEARAgUi\\Input\\",
+    "NaokiTsuchiya\\BEARAgUi\\Adapter\\",
+    "NaokiTsuchiya\\BEARAgUi\\ToolUse\\",
+    "NaokiTsuchiya\\BEARAgUi\\Sse\\",
 ]
