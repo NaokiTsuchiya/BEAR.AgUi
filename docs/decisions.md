@@ -146,3 +146,47 @@
   - 置き場所：`content → text` 抽出は純 AG-UI（tool-use 非依存）なので `Input/` 層の共有ヘルパー
     （例 `UserContent::toText(string|array): string`）。`lastUserMessage()` と `MessageHistoryMapper`（D15）で再利用。
   - ⚠️ 実装時に `InputContent` の判別子（`type:"text"` と text フィールド名）を AG-UI 型定義で確認。
+
+- **D18 (M2) `確定` example の LLM クライアントは `openai-php/client ^0.20`**（OpenAI 互換）。
+  - 理由：OpenAI 互換＝`OPENAI_BASE_URL` 差替で OpenRouter/Ollama/vLLM/Groq 等に届く。streaming + `tool_calls` delta
+    を同経路で対応（検証済み）。依存 7・MIT・de facto 標準。`require-dev` に閉じ本体 `require` を汚さない（`crc` 不変）。
+  - エンドポイントは AgentCore 規約踏襲の `POST /invocations` + `GET /ping`（AG-UI 自体は URL 未定義）。**LLM 切替は
+    `OPENAI_BASE_URL` env のみ**（`?mode=` クエリは廃止＝AG-UI 表面に裏口を作らない）。env は `OPENAI_*` prefix
+    （`OPENAI_API_KEY` / `OPENAI_BASE_URL` 既定 `https://api.openai.com/v1` / `OPENAI_MODEL` 既定 `gpt-4o-mini`）。
+  - 不採用：Symfony AI Platform（experimental・BC 保証なし・依存大）。M3 で多プロバイダ抽象の例として再検討可。
+    orhanerday/open-ai（streaming + tool_calls 未対応）。
+
+- **D19 (M2) `確定` OpenAI delta → bear `StreamEvent` は state machine 変換**。
+  - open block（`none`/`text`/`tool(index)`）を追跡し、境界で `CONTENT_BLOCK_STOP` を差し込む。`delta.content`→`TEXT_DELTA`、
+    `tool_calls[].id` 初出→`TOOL_USE_START`、`tool_calls[].function.arguments`→`TOOL_USE_DELTA`、`finishReason`→
+    `MESSAGE_STOP`。
+  - finish_reason マッピング：`tool_calls`/`function_call`→**`tool_use`**（唯一クリティカル＝ループ継続トリガ）、
+    その他（`stop`/`length`/`content_filter`）→`end_turn`。根拠：`StreamingAgent` は `tool_use`+pending 以外を
+    terminal complete に落とす（コード確認済み）。
+  - ⚠️ 並行ツールは**順次のみ**対応（index 跨ぎ arguments interleave は非対応）。bear `StreamContentAccumulator` 自体が
+    単数 `currentToolId`＝同じ制約。OpenAI は実際には順次送出するため実用上問題なし。README に明記。
+
+- **D20 (M2) `確定` bear `Message` → OpenAI request 変換**。
+  - `$system` 非空→先頭 `{role:system}`。`user`+text→`{role:user, content}`。`assistant`→`{role:assistant, content,
+    tool_calls:[{id, type:function, function:{name, arguments: json_encode(input)}}]}`。
+  - ⚠️ bear の `user` ロールは **2 用途**（通常 text / tool_result）。`content[].type` に `tool_result` を含むかで判別し、
+    tool_result は `{role:tool, tool_call_id, content}` 複数メッセージへ展開。`ToolResult.content`（mixed）は非 string を
+    `json_encode`（OpenAI tool content は string 必須）。
+
+- **D21 (M2) `確定` example は OpenAI 互換スタブ LLM を同梱**（`example/stub-llm/`）。
+  - `POST /v1/chat/completions` **単一エンドポイント**（openai-php は他 endpoint を叩かず起動時 preflight も無し・確認済み）。
+    `Authorization` は値を見ない（任意キー許可）。
+  - 受信 `messages` 末尾 `role` でターン判定する**単一 canned 会話**：ターン1（`role!=tool`）＝text + `get_time` tool_call
+    （arguments を 2 チャンクに分割）+ `finish_reason:tool_calls`／ターン2（`role==tool`）＝**受信 tool_result を echo** した
+    最終テキスト + `finish_reason:stop`。API キー不要で happy path 全周を再現。
+  - SSE 直列化は本体 `Sse/` を流用せず stub 独自の `echo+flush`。チャンク遅延は `STUB_DELAY_MS` env（既定 `0`）。
+  - `get_time` は実時刻（決定論不要＝結合テストは Fake 経由でこの経路を通らない）。interrupt は real 経路（model が
+    confirmable ツール `ask_confirmation` を選択）でのみ発現＝スタブ happy path とは排他。
+
+- **D22 (M2) `確定` M2 結合テストは HTTP を起こさない**。
+  - `AgUiRunner` をプロセス内で `tests/Fake`（D13）+ recording `SseSinkInterface` で駆動し SSE フレーム列（順序・ペアリング・
+    error/interrupt outcome）を検証。HTTP spawn（`php -S` + socket）はポート race・起動コスト・本番非再現で避ける。
+  - HTTP/SSE の本番逐次配信は `php -S`（cli-server）では本番（fpm+nginx のバッファ）を再現できないため**手動 smoke** に降格。
+    時計依存の自動テスト（受信時刻差アサート）は Fake の人工遅延を測るだけで不変条件を検証せず flake 源＝**置かない**。
+  - openai-php wrapper（D19）のユニットは、openai-php `withHttpClient()` に **stub `CannedConversation` をプロセス内で呼ぶ
+    PSR-18 fake** を注入し、実 SSE パース経路を HTTP 無しで通す（stub を単一ソースに再利用）。
