@@ -68,13 +68,19 @@ poc の実証済み層を本体 `src/`・`tests/` へ移植し、実 `bear/tool-
 
 ## M2 — example①：素 PHP HTTP サーバ + 結合テスト（ADR 0005）
 
-`poc/server.php` を発展させた**フレームワーク非依存の最小サーバ**を `example/` に置き、結合テスト対象にする。
+> **詳細タスク**: [`tasks-m2.md`](tasks-m2.md)（ファイル/クラス/メソッド粒度、着手順）
 
-- `/invocations`（SSE）+ `/ping`、`PhpSapiSseSink` で配信
-- `DefaultInstrumentedAgentFactory` + Fake LLM/Dispatcher（D13）で LLM 不要・決定論的に回す
-- サーバを起動して SSE を end-to-end 検証（フレーム順・逐次性）
+`poc/server.php` を発展させた**フレームワーク非依存の最小サーバ**を `example/server/` に置き、`AgUiRunner` の
+使用例とする。あわせて OpenAI 互換**スタブサーバ**を `example/stub-llm/` に同梱し、API キー無しで end-to-end を回す。
 
-**DoD**: 結合テストが CI で決定論的にグリーン。
+- `POST /invocations`（SSE）+ `GET /ping`、`PhpSapiSseSink` で配信
+- LLM は `openai-php/client`（OpenAI 互換）で接続。**本物/スタブの切替は `OPENAI_BASE_URL` env のみ**（D18）
+- スタブ LLM（D21）：`POST /v1/chat/completions` 単一エンドポイント、単一 canned 会話で tool ループ全周を再現
+- **結合テストは HTTP を起こさず**、`AgUiRunner` をプロセス内で Fake LLM/Dispatcher（D13）+ recording sink で駆動（D22）
+- HTTP/SSE の本番逐次配信は `php -S` では再現不能のため**手動 smoke**（時計依存の自動テストは置かない・D22）
+
+**DoD**: `composer tests`（mago + phpmd + phpunit unit/integration）と `composer crc` がグリーン。結合テストが
+CI で決定論的にグリーン。
 
 ## M3 — example②：BEAR.Sunday ショーケースアプリ
 
