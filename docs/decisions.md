@@ -93,7 +93,7 @@
     シナリオ：①テキストのみ ②単一ツール ③並行ツール（D9）④confirmation（→interrupt）⑤実行中エラー。
   - 遅延性：poc `verify.php` RUN3 を移植し、生成 vs write の interleave を spy で順序検証。
 
-- **D14 `確定` `AgUiRunner` は組み上げ済み agent ではなく `InstrumentedAgentFactory` を受ける**
+- **D14 `確定`（形は D23 で改訂）`AgUiRunner` は組み上げ済み agent ではなく `InstrumentedAgentFactory` を受ける**
   （アーキテクチャ精緻化で判明 → [architecture](architecture.md) §4-5）。`StreamingAgent` は final で依存が
   private のため、エンリッチ用デコレータ（D10）を**後付けできない**。よって「agent を作る前に依存を包む」＝
   factory がエンリッチ配線を担う形にする。
@@ -108,7 +108,7 @@
 
 ## M1 詳細決定
 
-- **D15 (Q-M1-1) `確定` マルチターン会話履歴は repo 側カバーで対応**（feedback と両建て・enrichment と同パターン）。
+- **D15 (Q-M1-1) `確定`（名称は D23 で改訂）マルチターン会話履歴は repo 側カバーで対応**（feedback と両建て・enrichment と同パターン）。
   - 前提整理：AG-UI は毎 run で `messages[]` を全送（履歴の正本はクライアント／サーバはステートレス）。
     **ReAct ループ自体は単一 run 内で完結**（ToolUse の `runStream` が reason/act/observe を回す）。multi-turn が
     足すのは「会話メモリ」で、AG-UI プロトコルとは**別レイヤー**（保管＝クライアント/app、再構成＝本ライブラリの
@@ -126,7 +126,7 @@
     API 後は seed 手段のみ差し替え、mapper（AG-UI→ToolUse 変換）は残る。
   - スコープ：multi-turn を後続から **M1 に格上げ**。
 
-- **D16 (Q-M1-2) `確定` 未宣言ツール名は lenient 交差で扱う（エラーにしない）**。
+- **D16 (Q-M1-2) `確定`（形は D23 で改訂）未宣言ツール名は lenient 交差で扱う（エラーにしない）**。
   - AG-UI の `tools[]` はクライアント提供のツール定義で、**client-side tool（フロント実行）を含みうる**＝
     サーバに無い名は正常。strict に HTTP 400 / RUN_ERROR を返すと標準 AG-UI クライアントを壊すため却下。
   - **`enabledTools = declaredToolNames() ∩ factory.knownToolNames()`**。未知名は黙って除外（debug ログ）。
@@ -138,7 +138,7 @@
     は `$this->tools` から1行）。
   - **client-side tool 実行は v1 非対応**（宣言されてもサーバは実行しない）と明記。
 
-- **D17 (Q-M1-3) `確定` `UserMessage.content` は text 抽出で正規化、マルチモーダル入力は v1 非対応**。
+- **D17 (Q-M1-3) `確定`（形は D23 で改訂）`UserMessage.content` は text 抽出で正規化、マルチモーダル入力は v1 非対応**。
   - `string`→そのまま。`InputContent[]`→ `type:"text"` パートのみ `\n` 連結、非テキスト（image/file）は**除外**
     （debug ログ）。抽出結果が空（text パート無し / `[]`）→ **HTTP 400**（接続前検証）。
   - 理由：降ろし先 ToolUse の `Message::user` / `runStream` が **text-only**。マルチモーダルは ToolUse 側の
@@ -190,3 +190,35 @@
     時計依存の自動テスト（受信時刻差アサート）は Fake の人工遅延を測るだけで不変条件を検証せず flake 源＝**置かない**。
   - openai-php wrapper（D19）のユニットは、openai-php `withHttpClient()` に **stub `CannedConversation` をプロセス内で呼ぶ
     PSR-18 fake** を注入し、実 SSE パース経路を HTTP 無しで通す（stub を単一ソースに再利用）。
+
+## M1 精緻化（実装後のパイプライン再設計・commit `62ff904`）
+
+- **D23 `確定` run パイプラインを「生成（runner）／レンダリング（host）」に分離し、協力者を app 単一ステートレスへ**。
+  M1 実装後の設計議論で D14〜D17 の具体形を以下へ精緻化した（方針は不変、**形のみ改訂**）。
+  古い記述（`architecture.md` §5 の `run(input, sink): void`／sink の `open/write/close`／adapter・responder の
+  per-run 構築／parse の例外 throw）は本決定で**置き換え**。
+  - **入力境界は純データ + 総関数パーサ**：`RunAgentInput` は**メソッドを持たない純データ**
+    （`threadId, runId, userMessage, history, declaredToolNames, context, state, forwardedProps, resume`）。
+    導出（trigger 分離・履歴・tools 射影・content→text）は唯一のビルダー `RunAgentInputParser::parse(string):
+    RunAgentInput|ParseError` が全て担う。**throw しない総関数**で、接続レベル失敗は `ParseError`（host が HTTP 400 へ）。
+    → D16/D17 の `fromJson`（例外）/`lastUserMessage()`/`declaredToolNames()`/`UserContent::toText` は廃止。
+    導出ロジックは `Input/Parser/` の per-VO パーサ群へ分解。
+  - **runner は生成のみ**：`AgUiRunner::stream(RunAgentInput): iterable<AgUiEventInterface>`。SSE 化・I/O・
+    HTTP ステータス写像は host の関心事。host が枠付ける：`$responder->respond($runner->stream($input), $sink)`。
+    → D14 の `run(RunAgentInput, SseSinkInterface): void` を置き換え。
+  - **協力者は app 単一ステートレス、run/request 固有値はメソッド引数**：
+    - `AgUiRunner` ctor＝`(InstrumentedAgentFactory, MessageHistoryMapper, AgUiAdapter, list<InputProcessorInterface>)`。
+      encoder/logger は直接保持しない（adapter/responder が持つ）。
+    - `AgUiAdapter`：ctor`(LoggerInterface)`、`run(Generator, threadId, runId, ToolCallView): Generator`。per-run 構築廃止。
+    - `SseResponder`：ctor`(SseEncoder)`、`respond(iterable, SseSinkInterface): void`。SSE ヘッダ集合を所有。per-request 構築廃止。
+    - per-run で作り捨てるのは **registry / デコレータ / agent** のみ。→ D14 の「per-run＝registry/agent/adapter」を改訂。
+  - **sink は単一 `send()` に集約**：`SseSinkInterface::send(array $headers, iterable $frames): void`（open/write/close 廃止）。
+    順序（status+headers→frames→end）を内部に隠蔽し誤順序・`headersSent` 状態を排除。`PhpSapiSseSink` が同梱実装。
+  - **factory のメソッド名・既定実装名を確定**：`InstrumentedAgentFactory::newInstance(ToolCallRecorder, list<Message>)`
+    （旧 `create`）、既定実装は `StreamingAgentFactory`（旧 `DefaultInstrumentedAgentFactory`）。→ D14/D15/D16 の名称を改訂。
+  - **エラー二分法は不変**：parse/接続失敗＝`ParseError`→HTTP 400（`stream()` 前）／実行中失敗＝`RUN_ERROR`（開いた 200 上）。
+
+- **D24 `保留` 汎用 `Result<T,E>` でパース結果を集約**（task list #10・ユーザー明示要望）。
+  現状パーサは `T|ParseError` のユニット返却で **fail-fast**（最初の `ParseError` で打ち切り）。`@template` な
+  `Result<T,E>` を導入して (a) パーサ各所のユニット + `Input/Message/ToolOutcome` を統一し、(b) パースを
+  **全 ParseError をパス付きで集約**する方式へ変更し、host が全不備を一度に報告できるようにする。M1 PR とは別 PR で対応。

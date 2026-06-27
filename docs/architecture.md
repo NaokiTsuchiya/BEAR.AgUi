@@ -34,8 +34,9 @@ AG-UI 側の正確な仕様は [`reference/ag-ui-protocol.md`](reference/ag-ui-p
 - `Event/` と `Sse/` は **`bear/tool-use` に一切依存しない**（純粋な AG-UI 直列化）。
 - `bear/tool-use` への結合は **`ToolUse/`（エンリッチ層）と `Adapter/` の 2 箇所に隔離**。
   → ToolUse が `AgentEvent` をエンリッチしたら `ToolUse/` を削除し `Adapter/` を簡素化するだけで済む。
-- 依存は内向き：`AgUiRunner → {Input, Adapter, ToolUse, Sse}`、`Adapter → Event`、`Sse → Event`。
-  逆向き（Event→Adapter 等）は作らない。
+- 依存は内向き：`AgUiRunner → {Adapter, ToolUse（factory/historyMapper）}`、`Adapter → Event`、`Sse → Event`。
+  逆向き（Event→Adapter 等）は作らない。**runner は `Sse/` に依存しない**（生成のみ。SSE 化は host が
+  `SseResponder`+sink で行う・D23）。`Input/`（parse 済み `RunAgentInput`）は host が runner に渡す。
 
 ---
 
@@ -50,18 +51,21 @@ AG-UI 側の正確な仕様は [`reference/ag-ui-protocol.md`](reference/ag-ui-p
 | `list<Tool>` / `systemPrompt` | **app 単一** | — | — |
 | `LoggerInterface`（psr/log） | **app 単一** | — | — |
 | `SseEncoder` | **app 単一** | — | ステートレス |
+| `MessageHistoryMapper` | **app 単一** | — | ステートレス |
 | `InstrumentedAgentFactory` | **app 単一** | 上記 LLM/Dispatcher/tools/prompt | — |
-| `AgUiRunner` | **app 単一** | factory, encoder, logger, 既定 processors | — |
+| `AgUiAdapter` | **app 単一** | logger | ステートレス（per-run 値は `run()` 引数） |
+| `SseResponder` | **app 単一** | encoder | ステートレス（sink は `respond()` 引数） |
+| `AgUiRunner` | **app 単一** | factory, historyMapper, adapter, 既定 processors | ステートレス |
 | `SseSinkInterface` 実装 | **per-request** | （HTTP response） | レスポンス保持 |
-| `SseResponder` | **per-request** | encoder, sink | — |
 | `ToolCallRegistry` | **per-run** | — | tool 相関の状態 |
 | `RecordingStreamingLlmClient` | **per-run** | 実 client, registry | 現在 tool id |
 | `RecordingDispatcher` | **per-run** | 実 dispatcher, registry | — |
 | `StreamingAgent`（ToolUse） | **per-run** | 上記デコレータ 2 つ, tools, prompt | `$messages` |
-| `AgUiAdapter` | **per-run** | threadId, runId, registry(view), logger | openMessageId, FIFO |
 
 > app 単一の重い依存（HTTP クライアント等）を、**per-run のデコレータが包む**のが要点。
-> registry / agent / adapter は run ごとに作り捨てる。
+> per-run で作り捨てるのは **registry / デコレータ / agent** のみ。adapter・responder・runner は
+> ステートレスな app 単一で、run/request 固有の値（threadId/runId/registry/sink）は**メソッド引数**で渡す
+> （D23 で per-run 構築から app 単一へ精緻化）。
 
 ---
 
@@ -99,30 +103,35 @@ interface ToolCallView {                            // 読み手＝AgUiAdapter
 // --- host が agent 構築を担い、その中で recorder 配線と履歴 seed を行う seam（S1）---
 interface InstrumentedAgentFactory {
     /** @param list<Message> $history 再構成済み会話履歴（D15・最後の user を除く） */
-    public function create(ToolCallRecorder $recorder, array $history): OptionAwareStreamingAgentInterface;
+    public function newInstance(ToolCallRecorder $recorder, array $history): OptionAwareStreamingAgentInterface;
     /** @return list<string> agent に登録されたサーバツール名（D16: 宣言ツールとの交差用） */
     public function knownToolNames(): array;
 }
 
-// --- 出力プリミティブ（S4・既存）---
+// --- 出力プリミティブ（S4・D23 で単一 send() に集約）---
 interface SseSinkInterface {
-    public function open(int $statusCode): void;
-    public function write(string $frame): void;
-    public function close(): void;
+    /**
+     * @param array<string, string> $headers SSE レスポンスヘッダ
+     * @param iterable<string>       $frames  エンコード済み SSE フレーム（遅延 pull）
+     */
+    public function send(array $headers, iterable $frames): void;
 }
 ```
 
-ライブラリは `InstrumentedAgentFactory` の**既定実装**（素の `StreamingAgent` 用）も同梱する：
+> `send()` 一発に集約したのは、status＋headers → body フレーム → end の**順序を内部に隠蔽**し、
+> 呼び出し側が `open/write/close` を誤順序で呼べないようにするため（`headersSent` 状態も持たない）。
+
+ライブラリは `InstrumentedAgentFactory` の**既定実装** `StreamingAgentFactory`（素の `StreamingAgent` 用）も同梱する：
 
 ```php
-final class DefaultInstrumentedAgentFactory implements InstrumentedAgentFactory {
+final readonly class StreamingAgentFactory implements InstrumentedAgentFactory {
     public function __construct(
         private StreamingLlmClientInterface $client,
         private DispatcherInterface $dispatcher,
         private array $tools, private string $systemPrompt,
     ) {}
 
-    public function create(ToolCallRecorder $rec, array $history): OptionAwareStreamingAgentInterface {
+    public function newInstance(ToolCallRecorder $rec, array $history): OptionAwareStreamingAgentInterface {
         $agent = new StreamingAgent(
             new RecordingStreamingLlmClient($this->client, $rec),  // S5
             new RecordingDispatcher($this->dispatcher, $rec),      // S5
@@ -144,42 +153,57 @@ final class DefaultInstrumentedAgentFactory implements InstrumentedAgentFactory 
 
 ---
 
-## 5. 構築シーケンス（per-run の組み立て）
+## 5. 構築シーケンス（ストリーム生成と host による枠付け）
 
-`AgUiRunner::run()` が 1 リクエストごとに以下を組む。registry は **同一実体を recorder と view の
-2 つの顔**で渡すのがポイント。
+役割分担が D23 で精緻化された：**`AgUiRunner::stream()` はイベントストリームを *生成*するだけ
+（レンダリングしない）**。SSE 化と I/O・HTTP ステータス写像は host の関心事で、host が
+`SseResponder` + sink で枠付ける：
 
 ```php
-final class AgUiRunner {
+// host 側（example/server や BEAR ハンドラ）
+$input = $parser->parse($body);                    // RunAgentInput | ParseError
+if ($input instanceof ParseError) {
+    // 接続レベルの失敗 → HTTP 400（ADR 0001）。stream は開かない
+    return http400($input->message);
+}
+$responder->respond($runner->stream($input), $sink);   // 200 + SSE を逐次配信
+```
+
+`AgUiRunner` 自身は run 固有の状態を持たず、協力者はすべてステートレスな app 単一を直接使う。
+per-run で作るのは registry と agent だけ。registry は **同一実体を recorder と view の 2 つの顔**で渡す。
+
+```php
+final readonly class AgUiRunner {
     public function __construct(
         private InstrumentedAgentFactory $agentFactory,
         private MessageHistoryMapper $historyMapper,   // D15: messages[] → list<Message>
-        private SseEncoder $encoder,
-        private ?LoggerInterface $logger = null,
-        private array $inputProcessors = [],   // ALPS safeOnly 等（D4/ADR0004）
+        private AgUiAdapter $adapter,                  // app 単一・ステートレス
+        private array $inputProcessors,                // ALPS safeOnly 等（D4/ADR0004）
     ) {}
 
-    public function run(RunAgentInput $input, SseSinkInterface $sink): void {
+    /** @return iterable<AgUiEventInterface> 遅延ストリーム（host が消費するまで agent は走らない） */
+    public function stream(RunAgentInput $input): iterable {
         $registry = new ToolCallRegistry();                       // per-run（recorder & view）
-        $history  = $this->historyMapper->map($input->historyMessages());  // D15: messages[] → list<Message>
-        $agent    = $this->agentFactory->create($registry, $history);     // S1: decorators 配線 + 履歴 seed
-        $declared = $input->declaredToolNames();                          // D16: lenient 交差
-        $enabled  = $declared === []
-            ? null                                                        // 空 → 絞らない（ALPS が統治）
-            : array_values(array_intersect($declared, $this->agentFactory->knownToolNames()));
+        $history  = $this->historyMapper->map($input->history);   // D15: 純射影。検証済み入力前提
+        $agent    = $this->agentFactory->newInstance($registry, $history);  // S1: decorators 配線 + 履歴 seed
+        $enabled  = $input->declaredToolNames === []              // D16: lenient 交差
+            ? null                                                // 空 → 絞らない（ALPS が統治）
+            : array_values(array_intersect($input->declaredToolNames, $this->agentFactory->knownToolNames()));
         $options  = AgentOptions::withProcessors(
             inputProcessors: $this->inputProcessors,
             enabledTools: $enabled,                              // 未知名（client-side tool）は除外
         );
-        $agentStream = $agent->runStream($input->lastUserMessage(), $options); // S2 上流
-        $adapter   = new AgUiAdapter($input->threadId, $input->runId, $registry, $this->logger);
-        $responder = new SseResponder($this->encoder, $sink);    // per-request
-        $responder->respond($adapter->run($agentStream));        // S2→S3→S4 を駆動
+        $agentStream = $agent->runStream($input->userMessage, $options);          // S2 上流
+        return $this->adapter->run($agentStream, $input->threadId, $input->runId, $registry); // S2→S3
     }
 }
 ```
 
-`RunAgentInput` 不正時は `run()` 前（`fromJson`）で例外 → **HTTP 400**（接続レベル・ADR 0001）。
+`RunAgentInput` は**純データ**で、不正入力は parse 境界（`RunAgentInputParser::parse(): RunAgentInput|ParseError`、
+**throw しない総関数**）で `ParseError` として弾かれ host が **HTTP 400** に写像する（ADR 0001）。よって
+`stream()` 到達時点で trigger（非空 user メッセージ）は検証済みで、`stream()` 内は純射影に保てる。
+返すのは遅延ストリームなので、実行中（mid-stream）の失敗は例外ではなく **`RUN_ERROR` イベント**として
+すでに開いた 200 ストリームに乗る。
 
 ---
 
@@ -202,8 +226,8 @@ final class AgUiRunner {
                                                         │  → Generator<AgUiEventInterface>         │
                                                         └───────────────┬──────────────────────────┘
                                                                         ▼ (S3)
-                                                        SseResponder::respond()
-                                                          foreach: SseEncoder.encode → SseSink.write+flush (S4)
+                                                        SseResponder::respond(events, sink)
+                                                          SseSink.send(headers, frames): frame ごとに encode→write+flush (S4)
                                                                         ▼
                                                               SSE をクライアントへ逐次配信
 ```
@@ -236,8 +260,10 @@ ToolUse `AgentEvent` → AG-UI イベントの写像表は [`reference/ag-ui-pro
 ## 8. 不変条件
 
 - **ToolUse 本体を無改造**。不足は S5 のデコレータ（外側）で補い、ループは再実装しない。
-- **レイヤーを混同しない**：変換=`AgUiAdapter`、フレーム化=`SseEncoder`、I/O=`SseSink`、起動=`AgUiRunner`/`RunAgentInput`。
+- **レイヤーを混同しない**：変換=`AgUiAdapter`、フレーム化=`SseEncoder`/`SseResponder`、I/O=`SseSink`、
+  オーケストレーション=`AgUiRunner`、入力境界=`RunAgentInputParser`/`RunAgentInput`。**生成（runner）と
+  レンダリング（responder+sink）は host が枠付けで分離**（D23）。
 - **`SseResponder` は body を畳まない**。1 イベントずつ pull→frame→write（無限ストリーム前提）。
 - **run をまたいで状態を共有しない**。registry/agent/adapter は per-run。
 - **`Event/`・`Sse/` を `bear/tool-use` に依存させない**（結合は `ToolUse/`・`Adapter/` に隔離）。
-- エラー二分法：検証失敗=HTTP 400（`run()` 前）／実行中=`RUN_ERROR`（HTTP 200）。
+- エラー二分法：検証失敗=HTTP 400（parse 境界の `ParseError`・`stream()` 前）／実行中=`RUN_ERROR`（HTTP 200）。

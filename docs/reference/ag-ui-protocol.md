@@ -166,10 +166,11 @@ type State   = any   // 任意のデータ構造
 
 ### 本実装への含意
 
-- `RunAgentInput::lastUserMessage()` は **`UserMessage.content` が `string` か `InputContent[]`** の両方を
-  想定する（poc は string のみ。配列ケースの扱いを T3 で決める）。
-- `declaredToolNames()` は `Tool.name` を読む（一致）。
-- v1 は `messages` の**最後の user メッセージのみ**を `runStream()` に渡す（履歴完全マッピングは後続）。
+- trigger（`RunAgentInput.userMessage`）の導出は `RunAgentInputParser` が担い、**`UserMessage.content` が
+  `string` か `InputContent[]`** の両方を想定する（text パートのみ抽出・D17）。
+- `RunAgentInput.declaredToolNames` は `Tool.name` を射影する（D16・一致）。
+- `messages[]` の**最後の user を trigger**、残りを `history` として `MessageHistoryMapper` が再構成し
+  agent に seed する（マルチターンは D15 で M1 に格上げ済み）。
 
 ---
 
