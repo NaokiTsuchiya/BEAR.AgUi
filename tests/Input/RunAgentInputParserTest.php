@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace NaokiTsuchiya\BEARAgUi\Input;
 
-use NaokiTsuchiya\BEARAgUi\Input\Message\UserMessage;
 use NaokiTsuchiya\BEARAgUi\Support\JsonFixture;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+
+use function array_map;
 
 /**
  * @mago-expect lint:too-many-methods
@@ -25,11 +26,9 @@ final class RunAgentInputParserTest extends TestCase
         static::assertInstanceOf(RunAgentInput::class, $input);
         static::assertSame('t-1', $input->threadId);
         static::assertSame('r-1', $input->runId);
-        static::assertCount(1, $input->messages);
-        $first = $input->messages[0];
-        static::assertInstanceOf(UserMessage::class, $first);
-        static::assertSame('hi', $first->text);
-        static::assertSame([], $input->tools);
+        static::assertSame('hi', $input->userMessage);
+        static::assertSame([], $input->history);
+        static::assertSame([], $input->declaredToolNames);
         static::assertSame([], $input->resume);
         static::assertNull($input->state);
     }
@@ -39,9 +38,7 @@ final class RunAgentInputParserTest extends TestCase
         $input = self::parse('Input/full.json');
 
         static::assertInstanceOf(RunAgentInput::class, $input);
-        static::assertSame(['search'], $input->declaredToolNames());
-        static::assertSame('d', $input->tools[0]->description);
-        static::assertSame(['q' => 'string'], $input->tools[0]->parameters);
+        static::assertSame(['search'], $input->declaredToolNames);
         static::assertSame('d', $input->context[0]->description);
         static::assertSame('v', $input->context[0]->value);
         static::assertSame(['k' => 'v'], $input->state);
@@ -50,6 +47,18 @@ final class RunAgentInputParserTest extends TestCase
         static::assertSame('i-1', $input->resume[0]->interruptId);
         static::assertSame('resolved', $input->resume[0]->status);
         static::assertNull($input->resume[0]->payload);
+    }
+
+    public function testSplitsTriggerFromHistory(): void
+    {
+        $input = self::parse('Input/history-before-trigger.json');
+
+        static::assertInstanceOf(RunAgentInput::class, $input);
+        static::assertSame('second', $input->userMessage);
+        static::assertSame(
+            ['user', 'assistant'],
+            array_map(static fn($message): string => $message->role(), $input->history),
+        );
     }
 
     public function testReturnsParseErrorForNonObjectBody(): void
@@ -124,6 +133,22 @@ final class RunAgentInputParserTest extends TestCase
         static::assertSame('messages[1].toolCallId is required', $result->message);
     }
 
+    public function testReturnsParseErrorWhenTriggerUserMessageIsEmpty(): void
+    {
+        $result = self::parse('Input/empty-user-content.json');
+
+        static::assertInstanceOf(ParseError::class, $result);
+        static::assertStringContainsString('user message with text content', $result->message);
+    }
+
+    public function testReturnsParseErrorWhenNoUserMessagePresent(): void
+    {
+        $result = self::parse('Input/no-user-message.json');
+
+        static::assertInstanceOf(ParseError::class, $result);
+        static::assertStringContainsString('user message with text content', $result->message);
+    }
+
     public function testReturnsParseErrorForAssistantToolCallInvalidJsonArguments(): void
     {
         $result = self::parse('Input/assistant-tool-call-invalid-arguments.json');
@@ -151,9 +176,7 @@ final class RunAgentInputParserTest extends TestCase
         $input = self::parse('Input/user-message-with-input-content.json');
 
         static::assertInstanceOf(RunAgentInput::class, $input);
-        $first = $input->messages[0];
-        static::assertInstanceOf(UserMessage::class, $first);
-        static::assertSame('describe this', $first->text);
+        static::assertSame('describe this', $input->userMessage);
     }
 
     private static function parse(string $fixture): RunAgentInput|ParseError

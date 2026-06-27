@@ -6,11 +6,15 @@ namespace NaokiTsuchiya\BEARAgUi\Input;
 
 use Closure;
 use JsonException;
+use NaokiTsuchiya\BEARAgUi\Input\Message\Message;
+use NaokiTsuchiya\BEARAgUi\Input\Message\UserMessage;
 use NaokiTsuchiya\BEARAgUi\Input\Parser\ContextParser;
 use NaokiTsuchiya\BEARAgUi\Input\Parser\MessageParser;
 use NaokiTsuchiya\BEARAgUi\Input\Parser\ResumeParser;
 use NaokiTsuchiya\BEARAgUi\Input\Parser\ToolParser;
 
+use function array_map;
+use function array_slice;
 use function is_array;
 use function json_decode;
 
@@ -30,9 +34,12 @@ use const JSON_THROW_ON_ERROR;
  * (e.g. `messages[2].toolCallId is required`).
  *
  * @mago-expect lint:cyclomatic-complexity
+ * @mago-expect lint:kan-defect
  *
- * Each helper is short and single-purpose; the class CC is the price of
- * the no-throw Result pipeline (decode → validateRequired → map → build).
+ * Each helper is short and single-purpose; the class CC / defect score is
+ * the price of the no-throw Result pipeline (decode → validateRequired →
+ * map each list → split trigger → build), where every step short-circuits
+ * on a ParseError.
  *
  * @internal
  */
@@ -70,16 +77,53 @@ final class RunAgentInputParser
             return $resume;
         }
 
+        // Split messages[] into the run trigger (latest user message text)
+        // and the prior history. Run-readiness — a non-empty trigger must
+        // exist — is validated here so the host's gate stays at the parse
+        // boundary and RunAgentInput can be pure data.
+        $trigger = self::splitTrigger($messages);
+        if ($trigger instanceof ParseError) {
+            return $trigger;
+        }
+
         return new RunAgentInput(
             threadId: $required['threadId'],
             runId: $required['runId'],
-            messages: $messages,
-            tools: $tools,
+            userMessage: $trigger['userMessage'],
+            history: $trigger['history'],
+            declaredToolNames: array_map(static fn(Tool $tool): string => $tool->name, $tools),
             context: $context,
             state: Coerce::assocOrNull($data['state'] ?? null),
             forwardedProps: Coerce::assoc($data['forwardedProps'] ?? null),
             resume: $resume,
         );
+    }
+
+    /**
+     * Find the latest {@see UserMessage} (the run trigger) and slice the
+     * turns before it as history. Fails when there is no user message or
+     * its text is empty.
+     *
+     * @param list<Message> $messages
+     *
+     * @return array{userMessage: non-empty-string, history: list<Message>}|ParseError
+     */
+    private static function splitTrigger(array $messages): array|ParseError
+    {
+        $userMessage = null;
+        $historyEnd = 0;
+        foreach ($messages as $index => $message) {
+            if ($message instanceof UserMessage) {
+                $userMessage = $message->text;
+                $historyEnd = $index;
+            }
+        }
+
+        if ($userMessage === null || $userMessage === '') {
+            return new ParseError('messages[] must contain a user message with text content.');
+        }
+
+        return ['userMessage' => $userMessage, 'history' => array_slice($messages, 0, $historyEnd)];
     }
 
     /** @return array<array-key, mixed>|ParseError */

@@ -9,16 +9,16 @@ use BEAR\ToolUse\Llm\StreamingLlmClientInterface;
 use BEAR\ToolUse\Runtime\Message as ToolUseMessage;
 use BEAR\ToolUse\Schema\Tool as SchemaTool;
 use Generator;
+use NaokiTsuchiya\BEARAgUi\Adapter\AgUiAdapter;
 use NaokiTsuchiya\BEARAgUi\AgUiRunner;
 use NaokiTsuchiya\BEARAgUi\Fake\FakeDispatcher;
 use NaokiTsuchiya\BEARAgUi\Fake\FakeStreamingLlmClient;
 use NaokiTsuchiya\BEARAgUi\Input\Message\AssistantMessage;
 use NaokiTsuchiya\BEARAgUi\Input\Message\Message;
 use NaokiTsuchiya\BEARAgUi\Input\Message\UserMessage;
-use NaokiTsuchiya\BEARAgUi\Input\ParseError;
 use NaokiTsuchiya\BEARAgUi\Input\RunAgentInput;
-use NaokiTsuchiya\BEARAgUi\Input\Tool as InputTool;
 use NaokiTsuchiya\BEARAgUi\Sse\SseEncoder;
+use NaokiTsuchiya\BEARAgUi\Sse\SseResponder;
 use NaokiTsuchiya\BEARAgUi\Support\RecordingSink;
 use NaokiTsuchiya\BEARAgUi\ToolUse\MessageHistoryMapper;
 use NaokiTsuchiya\BEARAgUi\ToolUse\StreamingAgentFactory;
@@ -59,11 +59,8 @@ final class AgUiRunnerTest extends TestCase
         ]);
         $sink = new RecordingSink();
 
-        $result = self::runner($llm, new FakeDispatcher(), [])->run(self::input([new UserMessage('m1', 'hi')]), $sink);
+        self::render(self::runner($llm, new FakeDispatcher(), []), self::input('hi'), $sink);
 
-        static::assertNull($result);
-        static::assertSame([200], $sink->opens);
-        static::assertSame(1, $sink->closes);
         static::assertSame(
             ['RUN_STARTED', 'TEXT_MESSAGE_START', 'TEXT_MESSAGE_CONTENT', 'TEXT_MESSAGE_END', 'RUN_FINISHED'],
             self::types($sink),
@@ -96,12 +93,11 @@ final class AgUiRunnerTest extends TestCase
             }
         };
 
-        $input = self::input([
+        $input = self::input('follow up', [
             new UserMessage('m1', 'first question'),
             new AssistantMessage('m2', 'first answer', []),
-            new UserMessage('m3', 'follow up'),
         ]);
-        self::runner($llm, new FakeDispatcher(), [])->run($input, new RecordingSink());
+        self::render(self::runner($llm, new FakeDispatcher(), []), $input, new RecordingSink());
 
         // The agent saw the seeded history followed by the new user turn.
         $messages = $captured[0];
@@ -136,13 +132,9 @@ final class AgUiRunnerTest extends TestCase
         // (client-side, unknown). If the unknown name leaked into
         // enabledTools, AgentOptions::filterTools() would throw and the run
         // would surface RUN_ERROR — its absence proves the intersection.
-        $input = self::input([new UserMessage('m1', 'hi')], [
-            new InputTool('search', '', []),
-            new InputTool('browser', '', []),
-        ]);
-        $result = self::runner($llm, $dispatcher, [self::tool('search')])->run($input, $sink);
+        $input = self::input('hi', [], ['search', 'browser']);
+        self::render(self::runner($llm, $dispatcher, [self::tool('search')]), $input, $sink);
 
-        static::assertNull($result);
         $types = self::types($sink);
         static::assertContains('TOOL_CALL_RESULT', $types);
         static::assertNotContains('RUN_ERROR', $types);
@@ -161,8 +153,8 @@ final class AgUiRunnerTest extends TestCase
         $dispatcher = new FakeDispatcher();
         $sink = new RecordingSink();
 
-        $input = self::input([new UserMessage('m1', 'do it')], [new InputTool('writer', '', [])]);
-        self::runner($llm, $dispatcher, [self::confirmableTool('writer')])->run($input, $sink);
+        $input = self::input('do it', [], ['writer']);
+        self::render(self::runner($llm, $dispatcher, [self::confirmableTool('writer')]), $input, $sink);
 
         $events = self::decode($sink);
         $finished = $events[array_key_last($events)];
@@ -180,30 +172,9 @@ final class AgUiRunnerTest extends TestCase
         // 400. The stream is already open at 200 by then.
         $sink = new RecordingSink();
 
-        $result = self::runner(new FakeStreamingLlmClient(), new FakeDispatcher(), [])->run(
-            self::input([new UserMessage('m1', 'hi')]),
-            $sink,
-        );
+        self::render(self::runner(new FakeStreamingLlmClient(), new FakeDispatcher(), []), self::input('hi'), $sink);
 
-        static::assertNull($result);
-        static::assertSame([200], $sink->opens);
-        static::assertSame(1, $sink->closes);
         static::assertSame('RUN_ERROR', self::types($sink)[array_key_last(self::types($sink))]);
-    }
-
-    public function testEmptyUserContentReturnsParseErrorWithoutOpeningSink(): void
-    {
-        $sink = new RecordingSink();
-
-        $result = self::runner(new FakeStreamingLlmClient(), new FakeDispatcher(), [])->run(
-            self::input([new UserMessage('m1', '')]),
-            $sink,
-        );
-
-        static::assertInstanceOf(ParseError::class, $result);
-        static::assertSame([], $sink->opens);
-        static::assertSame([], $sink->frames);
-        static::assertSame(0, $sink->closes);
     }
 
     /** @param list<SchemaTool> $tools */
@@ -215,16 +186,27 @@ final class AgUiRunnerTest extends TestCase
         return new AgUiRunner(
             new StreamingAgentFactory($llm, $dispatcher, $tools, 'system'),
             new MessageHistoryMapper(),
-            new SseEncoder(),
-            new NullLogger(),
+            new AgUiAdapter(new NullLogger()),
             [],
         );
     }
 
-    /** @param list<Message> $messages */
-    private static function input(array $messages, array $tools = []): RunAgentInput
+    /** Play the host: frame the runner's event stream to SSE and capture it. */
+    private static function render(AgUiRunner $runner, RunAgentInput $input, RecordingSink $sink): void
     {
-        return new RunAgentInput('t', 'r', $messages, $tools, [], null, [], []);
+        (new SseResponder(new SseEncoder()))->respond($runner->stream($input), $sink);
+    }
+
+    /**
+     * @param list<Message> $history
+     * @param list<string>  $declaredToolNames
+     */
+    private static function input(
+        string $userMessage,
+        array $history = [],
+        array $declaredToolNames = [],
+    ): RunAgentInput {
+        return new RunAgentInput('t', 'r', $userMessage, $history, $declaredToolNames, [], null, [], []);
     }
 
     private static function tool(string $name): SchemaTool
@@ -256,9 +238,7 @@ final class AgUiRunnerTest extends TestCase
     /** @return list<string> */
     private static function types(RecordingSink $sink): array
     {
-        /** @var list<string> $types */
-        $types = array_column(self::decode($sink), 'type');
-
-        return $types;
+        /** @var list<string> */
+        return array_column(self::decode($sink), 'type');
     }
 }

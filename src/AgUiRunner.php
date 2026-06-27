@@ -7,41 +7,42 @@ namespace NaokiTsuchiya\BEARAgUi;
 use BEAR\ToolUse\Runtime\AgentOptions;
 use BEAR\ToolUse\Runtime\InputProcessorInterface;
 use NaokiTsuchiya\BEARAgUi\Adapter\AgUiAdapter;
-use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Event\AgUiEventInterface;
 use NaokiTsuchiya\BEARAgUi\Input\RunAgentInput;
-use NaokiTsuchiya\BEARAgUi\Sse\SseEncoder;
-use NaokiTsuchiya\BEARAgUi\Sse\SseResponder;
-use NaokiTsuchiya\BEARAgUi\Sse\SseSinkInterface;
 use NaokiTsuchiya\BEARAgUi\ToolUse\InstrumentedAgentFactory;
 use NaokiTsuchiya\BEARAgUi\ToolUse\MessageHistoryMapper;
 use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;
-use Psr\Log\LoggerInterface;
 
 use function array_intersect;
 use function array_values;
 
 /**
- * Host-facing facade: maps an already-parsed {@see RunAgentInput} to an
- * agent run and streams the result out over SSE.
+ * Host-facing facade: maps an already-parsed {@see RunAgentInput} to the
+ * lazy AG-UI event stream the run produces.
  *
- * Assembly per run (ADR 0001, architecture §5):
+ * It only orchestrates — it does not render. The host frames the returned
+ * events to SSE via {@see \NaokiTsuchiya\BEARAgUi\Sse\SseResponder} and a
+ * sink:
  *
- *  1. Pre-flight (before the sink opens): resolve the trailing user
- *     message and reconstruct the prior history. A pre-flight
- *     {@see ParseError} (empty user content) is *returned*, not streamed —
- *     the sink is never opened, so the host maps it to HTTP 400. This keeps
- *     the error dichotomy intact: connection-level failures are 400s,
- *     mid-stream failures are RUN_ERROR over an already-open 200 stream.
- *  2. Build a per-run {@see ToolCallRegistry} and hand it to the factory as
- *     the recorder, plus the seeded history (D14/D15).
- *  3. Intersect the client's declared tools with what the agent knows
+ *     $responder->respond($runner->stream($input), $sink);
+ *
+ * keeping rendering / I/O (and HTTP-status mapping) the host's concern.
+ *
+ * Per stream (ADR 0001, architecture §5):
+ *
+ *  1. Build a per-run {@see ToolCallRegistry} and hand it to the factory as
+ *     the recorder, plus the seeded history (D14/D15). The input's
+ *     run-readiness (a non-empty trigger message) was already validated at
+ *     the parse boundary, so this stays a pure projection — connection-level
+ *     failures became HTTP 400 before the host ever called stream().
+ *  2. Intersect the client's declared tools with what the agent knows
  *     (D16) — empty declaration means "don't filter".
- *  4. Drive the agent → adapter → responder generator pipeline lazily.
+ *  3. Return the agent → adapter generator. Nothing runs until the host
+ *     iterates it, so mid-stream failures surface as RUN_ERROR events, not
+ *     exceptions.
  *
- * Lifetime: app-singleton. The factory / mapper / encoder / logger /
- * default processors are all stable; only the registry, agent, and adapter
- * are per-run (built inside {@see run()}). The sink is per-request and
- * supplied by the caller.
+ * All collaborators are stateless app-singletons used directly; only the
+ * registry and agent are per-run, built inside {@see stream()}.
  *
  * @api
  */
@@ -51,40 +52,33 @@ final readonly class AgUiRunner
     public function __construct(
         private InstrumentedAgentFactory $agentFactory,
         private MessageHistoryMapper $historyMapper,
-        private SseEncoder $encoder,
-        private LoggerInterface $logger,
+        private AgUiAdapter $adapter,
         private array $inputProcessors,
     ) {}
 
     /**
-     * Run the agent for `$input` and stream AG-UI events to `$sink`.
+     * Produce the AG-UI event stream for `$input`.
      *
-     * Returns a {@see ParseError} when pre-flight validation fails (the sink
-     * stays untouched so the host can respond with HTTP 400); returns `null`
-     * once the stream has been driven to completion (the sink saw a 200
-     * RUN_STARTED … RUN_FINISHED/RUN_ERROR sequence).
+     * `$input` is assumed valid — parsing already rejected non-runnable
+     * inputs (no/empty trigger) as HTTP 400. The returned stream is lazy:
+     * the agent does not run until the host consumes it.
+     *
+     * @return iterable<AgUiEventInterface>
      */
-    public function run(RunAgentInput $input, SseSinkInterface $sink): ParseError|null
+    public function stream(RunAgentInput $input): iterable
     {
-        $userMessage = $input->lastUserMessage();
-        if ($userMessage instanceof ParseError) {
-            return $userMessage;
-        }
-
-        $history = $this->historyMapper->map($input->historyMessages());
+        $history = $this->historyMapper->map($input->history);
         $registry = new ToolCallRegistry();
         $agent = $this->agentFactory->newInstance($registry, $history);
 
         $options = AgentOptions::withProcessors(
             inputProcessors: $this->inputProcessors,
-            enabledTools: $this->enabledTools($input->declaredToolNames()),
+            enabledTools: $this->enabledTools($input->declaredToolNames),
         );
 
-        $agentStream = $agent->runStream($userMessage, $options);
-        $adapter = new AgUiAdapter($input->threadId, $input->runId, $registry, $this->logger);
-        (new SseResponder($this->encoder, $sink))->respond($adapter->run($agentStream), 200);
+        $agentStream = $agent->runStream($input->userMessage, $options);
 
-        return null;
+        return $this->adapter->run($agentStream, $input->threadId, $input->runId, $registry);
     }
 
     /**

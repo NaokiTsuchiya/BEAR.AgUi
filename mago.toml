@@ -115,17 +115,18 @@ permit = [
 ]
 
 [[guard.perimeter.rules]]
-# AgUiRunner is the facade that assembles the per-run pipeline; it may
-# reach every internal layer (architecture §1: AgUiRunner → {Input,
-# Adapter, ToolUse, Sse}) plus BEAR\ToolUse (AgentOptions) and Psr\Log.
+# AgUiRunner is the facade that orchestrates a run into an AG-UI event
+# stream (architecture §1). It reaches Input / ToolUse / Adapter plus
+# BEAR\ToolUse (AgentOptions), and names Event/ in its return type. It does
+# NOT render — the host wires the Sse layer — so the facade touches neither
+# Sse\ nor Psr\Log.
 namespace = "NaokiTsuchiya\\BEARAgUi\\"
 permit = [
     "@native",
     "@self",
-    "Psr\\Log\\",
     "BEAR\\ToolUse\\",
     "NaokiTsuchiya\\BEARAgUi\\Input\\",
     "NaokiTsuchiya\\BEARAgUi\\Adapter\\",
     "NaokiTsuchiya\\BEARAgUi\\ToolUse\\",
-    "NaokiTsuchiya\\BEARAgUi\\Sse\\",
+    "NaokiTsuchiya\\BEARAgUi\\Event\\",
 ]

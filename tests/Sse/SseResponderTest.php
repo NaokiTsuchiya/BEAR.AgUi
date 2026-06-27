@@ -15,20 +15,19 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(SseResponder::class)]
 final class SseResponderTest extends TestCase
 {
-    public function testWritesOneFramePerEventAndOpensThenClosesTheSinkOnce(): void
+    public function testSendsTheSseHeadersAndOneFramePerEvent(): void
     {
         $sink = new RecordingSink();
-        $responder = new SseResponder(new SseEncoder(), $sink);
+        $responder = new SseResponder(new SseEncoder());
 
         $events = [
             new RunStarted('t-1', 'r-1'),
             new TextMessageContent('m-1', 'hi'),
         ];
 
-        $responder->respond($events, 200);
+        $responder->respond($events, $sink);
 
-        static::assertSame([200], $sink->opens);
-        static::assertSame(1, $sink->closes);
+        static::assertSame('text/event-stream', $sink->headers['Content-Type']);
         static::assertCount(2, $sink->frames);
         static::assertStringStartsWith('data: {"type":"RUN_STARTED"', $sink->frames[0]);
         static::assertStringEndsWith("\n\n", $sink->frames[0]);
@@ -36,10 +35,11 @@ final class SseResponderTest extends TestCase
     }
 
     /**
-     * Verifies the responder does NOT collapse the generator: every yield is
-     * followed by exactly one write before the next yield is requested.
+     * Verifies the frame stream handed to the sink is lazy: every yield is
+     * followed by exactly one consumed frame before the next yield, so the
+     * sink streams one frame at a time rather than buffering.
      */
-    public function testInterleavesYieldAndWriteOneByOne(): void
+    public function testFrameStreamIsConsumedLazilyOneByOne(): void
     {
         $log = [];
 
@@ -50,11 +50,10 @@ final class SseResponderTest extends TestCase
             yield new TextMessageContent('m-1', 'b');
         })();
 
-        $sink = new LoggingSink($log);
-        $responder = new SseResponder(new SseEncoder(), $sink);
+        $responder = new SseResponder(new SseEncoder());
 
-        $responder->respond($events, 200);
+        $responder->respond($events, new LoggingSink($log));
 
-        static::assertSame(['open', 'yield:a', 'write', 'yield:b', 'write', 'close'], $log);
+        static::assertSame(['yield:a', 'write', 'yield:b', 'write'], $log);
     }
 }

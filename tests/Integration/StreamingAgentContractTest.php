@@ -255,10 +255,10 @@ final class StreamingAgentContractTest extends TestCase
             tools: [],
             systemPrompt: '',
         );
-        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
+        $adapter = new AgUiAdapter(new NullLogger());
 
         $deltas = 0;
-        foreach ($adapter->run($agent->runStream('hi')) as $event) {
+        foreach ($adapter->run($agent->runStream('hi'), 't', 'r', $registry) as $event) {
             if (!$event instanceof TextMessageContent) {
                 continue;
             }

@@ -1,0 +1,7 @@
+{
+  "threadId": "t",
+  "runId": "r",
+  "messages": [
+    {"id": "m-1", "role": "assistant", "content": "hi"}
+  ]
+}

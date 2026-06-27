@@ -40,10 +40,10 @@ trait StreamingPipelineFixture
             tools: $tools,
             systemPrompt: '',
         );
-        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
+        $adapter = new AgUiAdapter(new NullLogger());
 
         $events = [];
-        foreach ($adapter->run($agent->runStream($userMessage)) as $event) {
+        foreach ($adapter->run($agent->runStream($userMessage), 't', 'r', $registry) as $event) {
             $events[] = $event;
         }
 
