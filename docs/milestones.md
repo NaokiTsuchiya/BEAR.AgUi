@@ -43,7 +43,7 @@ poc の実証済み層を本体 `src/`・`tests/` へ移植し、実 `bear/tool-
 
 ## M1 — ファサード `AgUiRunner` + 起動マッピング（ADR 0001/0004/0006）
 
-> **詳細タスク**: [`tasks-m1.md`](tasks-m1.md)（ファイル/クラス/メソッド粒度、着手順）
+> **詳細タスク**: [`done/tasks-m1.md`](done/tasks-m1.md)（完了済み）。最終形は [`decisions.md`](decisions.md) D23・[`architecture.md`](architecture.md) §4-5 を正とする
 
 入力境界からエージェント起動・SSE 配信までを 1 つのファサードにまとめる。
 

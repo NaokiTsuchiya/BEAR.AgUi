@@ -1,0 +1,15 @@
+{
+  "threadId": "t",
+  "runId": "r",
+  "messages": [
+    {"id": "m-1", "role": "user", "content": "hi"},
+    {
+      "id": "m-2",
+      "role": "assistant",
+      "content": null,
+      "toolCalls": [
+        {"id": "call-1", "type": "function", "function": {"name": "search", "arguments": "not json"}}
+      ]
+    }
+  ]
+}

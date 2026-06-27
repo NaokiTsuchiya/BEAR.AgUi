@@ -1,0 +1,9 @@
+{
+  "threadId": "t",
+  "runId": "r",
+  "messages": [
+    {"id": "m-1", "role": "user", "content": "first"},
+    {"id": "m-2", "role": "assistant", "content": "reply"},
+    {"id": "m-3", "role": "user", "content": "second"}
+  ]
+}

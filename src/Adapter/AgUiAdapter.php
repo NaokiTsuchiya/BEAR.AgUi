@@ -23,15 +23,16 @@ use Throwable;
  * owns neither — it just wires them together so callers have a single
  * `run()` entry point.
  *
+ * Stateless app-singleton: it holds only the app-wide {@see LoggerInterface};
+ * the per-run correlation data (threadId, runId, the registry read view) is
+ * passed to {@see run()}, so the adapter needs no per-run construction.
+ *
  * @api
  */
-final class AgUiAdapter
+final readonly class AgUiAdapter
 {
     public function __construct(
-        private readonly string $threadId,
-        private readonly string $runId,
-        private readonly ToolCallView $registry,
-        private readonly LoggerInterface $logger,
+        private LoggerInterface $logger,
     ) {}
 
     /**
@@ -39,10 +40,10 @@ final class AgUiAdapter
      *
      * @return Generator<int, AgUiEventInterface, mixed, void>
      */
-    public function run(Generator $agentStream): Generator
+    public function run(Generator $agentStream, string $threadId, string $runId, ToolCallView $view): Generator
     {
-        $translator = new AgentEventTranslator($this->threadId, $this->runId, $this->registry, $this->logger);
-        $lifecycle = new LifecycleWrapper($this->threadId, $this->runId, $this->logger);
+        $translator = new AgentEventTranslator($threadId, $runId, $view, $this->logger);
+        $lifecycle = new LifecycleWrapper($threadId, $runId, $this->logger);
 
         try {
             yield from $lifecycle->wrap($translator->translate($agentStream));

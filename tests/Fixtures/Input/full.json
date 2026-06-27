@@ -1,0 +1,18 @@
+{
+  "threadId": "t",
+  "runId": "r",
+  "messages": [
+    {"id": "m-1", "role": "user", "content": "hi"}
+  ],
+  "tools": [
+    {"name": "search", "description": "d", "parameters": {"q": "string"}}
+  ],
+  "context": [
+    {"description": "d", "value": "v"}
+  ],
+  "state": {"k": "v"},
+  "forwardedProps": {"a": 1},
+  "resume": [
+    {"interruptId": "i-1", "status": "resolved"}
+  ]
+}

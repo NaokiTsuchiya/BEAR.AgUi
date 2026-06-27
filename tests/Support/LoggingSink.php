@@ -8,8 +8,9 @@ use NaokiTsuchiya\BEARAgUi\Sse\SseSinkInterface;
 use Override;
 
 /**
- * SseSinkInterface double that appends 'open' / 'write' / 'close' to a shared
- * log so callers can assert interleave with an external producer.
+ * SseSinkInterface double that appends 'write' to a shared log as it pulls
+ * each frame, so callers can assert the sink consumes the frame stream lazily
+ * (interleaved with the producer) rather than buffering it.
  */
 final class LoggingSink implements SseSinkInterface
 {
@@ -19,20 +20,10 @@ final class LoggingSink implements SseSinkInterface
     ) {}
 
     #[Override]
-    public function open(int $_statusCode): void
+    public function send(array $headers, iterable $frames): void
     {
-        $this->log[] = 'open';
-    }
-
-    #[Override]
-    public function write(string $_frame): void
-    {
-        $this->log[] = 'write';
-    }
-
-    #[Override]
-    public function close(): void
-    {
-        $this->log[] = 'close';
+        foreach ($frames as $_frame) {
+            $this->log[] = 'write';
+        }
     }
 }

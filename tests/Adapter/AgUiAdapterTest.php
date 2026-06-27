@@ -32,13 +32,18 @@ final class AgUiAdapterTest extends TestCase
     public function testTextDeltaWrappedByStartAndEndAroundRun(): void
     {
         $registry = new ToolCallRegistry();
-        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
+        $adapter = new AgUiAdapter(new NullLogger());
 
-        $events = $this->collect($adapter->run($this->generator([
-            AgentEvent::textDelta('hi'),
-            AgentEvent::textDelta(' there'),
-            AgentEvent::completed('hi there'),
-        ])));
+        $events = $this->collect($adapter->run(
+            $this->generator([
+                AgentEvent::textDelta('hi'),
+                AgentEvent::textDelta(' there'),
+                AgentEvent::completed('hi there'),
+            ]),
+            't',
+            'r',
+            $registry,
+        ));
 
         static::assertInstanceOf(RunStarted::class, $events[0]);
         static::assertInstanceOf(TextMessageStart::class, $events[1]);
@@ -63,13 +68,18 @@ final class AgUiAdapterTest extends TestCase
         $registry->appendInput('call-1', '{"q":"hi"}');
         $registry->recordResult(new ToolCall('call-1', 'search', ['q' => 'hi']), ToolResult::success('call-1', 'hits'));
 
-        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
+        $adapter = new AgUiAdapter(new NullLogger());
 
-        $events = $this->collect($adapter->run($this->generator([
-            AgentEvent::toolStart('search'),
-            AgentEvent::toolResult('search'),
-            AgentEvent::completed(''),
-        ])));
+        $events = $this->collect($adapter->run(
+            $this->generator([
+                AgentEvent::toolStart('search'),
+                AgentEvent::toolResult('search'),
+                AgentEvent::completed(''),
+            ]),
+            't',
+            'r',
+            $registry,
+        ));
 
         static::assertInstanceOf(RunStarted::class, $events[0]);
         static::assertInstanceOf(ToolCallStart::class, $events[1]);
@@ -97,15 +107,20 @@ final class AgUiAdapterTest extends TestCase
         $registry->recordResult(new ToolCall('call-1', 'a', ['x' => 1]), ToolResult::success('call-1', 'A'));
         $registry->recordResult(new ToolCall('call-2', 'b', ['y' => 2]), ToolResult::success('call-2', 'B'));
 
-        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
+        $adapter = new AgUiAdapter(new NullLogger());
 
-        $events = $this->collect($adapter->run($this->generator([
-            AgentEvent::toolStart('a'),
-            AgentEvent::toolStart('b'),
-            AgentEvent::toolResult('a'),
-            AgentEvent::toolResult('b'),
-            AgentEvent::completed(''),
-        ])));
+        $events = $this->collect($adapter->run(
+            $this->generator([
+                AgentEvent::toolStart('a'),
+                AgentEvent::toolStart('b'),
+                AgentEvent::toolResult('a'),
+                AgentEvent::toolResult('b'),
+                AgentEvent::completed(''),
+            ]),
+            't',
+            'r',
+            $registry,
+        ));
 
         // Lifecycle: RunStarted, 2× ToolCallStart, 2× (Args, End, Result), RunFinished
         static::assertInstanceOf(RunStarted::class, $events[0]);
@@ -140,13 +155,18 @@ final class AgUiAdapterTest extends TestCase
         $registry->recordStart('call-1', 'unregistered');
         // Intentionally no recordResult — simulates unregistered tool branch.
 
-        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
+        $adapter = new AgUiAdapter(new NullLogger());
 
-        $events = $this->collect($adapter->run($this->generator([
-            AgentEvent::toolStart('unregistered'),
-            AgentEvent::toolResult('unregistered'),
-            AgentEvent::completed(''),
-        ])));
+        $events = $this->collect($adapter->run(
+            $this->generator([
+                AgentEvent::toolStart('unregistered'),
+                AgentEvent::toolResult('unregistered'),
+                AgentEvent::completed(''),
+            ]),
+            't',
+            'r',
+            $registry,
+        ));
 
         static::assertInstanceOf(ToolCallEnd::class, $events[2]);
         static::assertSame('call-1', $events[2]->toolCallId);
@@ -163,14 +183,19 @@ final class AgUiAdapterTest extends TestCase
         $registry->recordStart('call-1', 'search');
         $registry->recordResult(new ToolCall('call-1', 'search', []), ToolResult::success('call-1', 'ok'));
 
-        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
+        $adapter = new AgUiAdapter(new NullLogger());
 
-        $events = $this->collect($adapter->run($this->generator([
-            AgentEvent::textDelta('thinking…'),
-            AgentEvent::toolStart('search'),
-            AgentEvent::toolResult('search'),
-            AgentEvent::completed(''),
-        ])));
+        $events = $this->collect($adapter->run(
+            $this->generator([
+                AgentEvent::textDelta('thinking…'),
+                AgentEvent::toolStart('search'),
+                AgentEvent::toolResult('search'),
+                AgentEvent::completed(''),
+            ]),
+            't',
+            'r',
+            $registry,
+        ));
 
         static::assertInstanceOf(TextMessageStart::class, $events[1]);
         static::assertInstanceOf(TextMessageContent::class, $events[2]);
@@ -181,14 +206,19 @@ final class AgUiAdapterTest extends TestCase
     public function testConfirmationRequiredTerminatesRunWithInterruptOutcome(): void
     {
         $registry = new ToolCallRegistry();
-        $adapter = new AgUiAdapter('t', 'r', $registry, new NullLogger());
+        $adapter = new AgUiAdapter(new NullLogger());
 
-        $events = $this->collect($adapter->run($this->generator([
-            AgentEvent::confirmationRequired('writer', 'call-9', ['path' => '/x'], 'About to write /x'),
-            // The agent would normally yield further events if we sent true; the
-            // adapter should stop consuming as soon as it emits the interrupt.
-            AgentEvent::completed('never seen'),
-        ])));
+        $events = $this->collect($adapter->run(
+            $this->generator([
+                AgentEvent::confirmationRequired('writer', 'call-9', ['path' => '/x'], 'About to write /x'),
+                // The agent would normally yield further events if we sent true; the
+                // adapter should stop consuming as soon as it emits the interrupt.
+                AgentEvent::completed('never seen'),
+            ]),
+            't',
+            'r',
+            $registry,
+        ));
 
         static::assertCount(2, $events);
         static::assertInstanceOf(RunStarted::class, $events[0]);
@@ -206,13 +236,18 @@ final class AgUiAdapterTest extends TestCase
     {
         $registry = new ToolCallRegistry();
         $logger = new RecordingLogger();
-        $adapter = new AgUiAdapter('t', 'r', $registry, $logger);
+        $adapter = new AgUiAdapter($logger);
 
-        $events = $this->collect($adapter->run($this->generator([
-            AgentEvent::textDelta('partial'),
-            AgentEvent::error('Max iterations reached'),
-            AgentEvent::completed('never seen'),
-        ])));
+        $events = $this->collect($adapter->run(
+            $this->generator([
+                AgentEvent::textDelta('partial'),
+                AgentEvent::error('Max iterations reached'),
+                AgentEvent::completed('never seen'),
+            ]),
+            't',
+            'r',
+            $registry,
+        ));
 
         static::assertInstanceOf(RunStarted::class, $events[0]);
         static::assertInstanceOf(TextMessageStart::class, $events[1]);
@@ -234,14 +269,14 @@ final class AgUiAdapterTest extends TestCase
     {
         $registry = new ToolCallRegistry();
         $logger = new RecordingLogger();
-        $adapter = new AgUiAdapter('t', 'r', $registry, $logger);
+        $adapter = new AgUiAdapter($logger);
 
         $throwing = (static function (): Generator {
             yield AgentEvent::textDelta('hi');
             throw new RuntimeException('boom');
         })();
 
-        $events = $this->collect($adapter->run($throwing));
+        $events = $this->collect($adapter->run($throwing, 't', 'r', $registry));
 
         static::assertInstanceOf(RunStarted::class, $events[0]);
         static::assertInstanceOf(TextMessageStart::class, $events[1]);

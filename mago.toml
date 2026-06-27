@@ -62,6 +62,9 @@ mode = "perimeter"
 excludes = ["tests/**"]
 
 [guard.perimeter]
+# AgUiRunner (root namespace) is the composition root; the more specific
+# sub-namespace layers below win for everything under it.
+layers.facade = ["NaokiTsuchiya\\BEARAgUi\\"]
 layers.event = ["NaokiTsuchiya\\BEARAgUi\\Event\\"]
 layers.sse = ["NaokiTsuchiya\\BEARAgUi\\Sse\\"]
 layers.input = ["NaokiTsuchiya\\BEARAgUi\\Input\\"]
@@ -87,8 +90,17 @@ permit = ["@native", "@self"]
 
 [[guard.perimeter.rules]]
 # ToolUse/ is the enrichment shim — explicitly bound to BEAR\ToolUse.
+# Input/ is allowed so MessageHistoryMapper can consume the typed AG-UI
+# message graph (Message variants, AssistantToolCall, etc.) without
+# re-walking raw arrays.
 namespace = "NaokiTsuchiya\\BEARAgUi\\ToolUse\\"
-permit = ["@native", "@self", "BEAR\\ToolUse\\"]
+permit = [
+    "@native",
+    "@self",
+    "BEAR\\ToolUse\\",
+    "NaokiTsuchiya\\BEARAgUi\\Input\\",
+    "NaokiTsuchiya\\BEARAgUi\\Input\\Message\\",
+]
 
 [[guard.perimeter.rules]]
 # Adapter/ converts AgentEvent → AG-UI events using the registry.
@@ -100,4 +112,21 @@ permit = [
     "NaokiTsuchiya\\BEARAgUi\\Event\\",
     "NaokiTsuchiya\\BEARAgUi\\ToolUse\\",
     "BEAR\\ToolUse\\",
+]
+
+[[guard.perimeter.rules]]
+# AgUiRunner is the facade that orchestrates a run into an AG-UI event
+# stream (architecture §1). It reaches Input / ToolUse / Adapter plus
+# BEAR\ToolUse (AgentOptions), and names Event/ in its return type. It does
+# NOT render — the host wires the Sse layer — so the facade touches neither
+# Sse\ nor Psr\Log.
+namespace = "NaokiTsuchiya\\BEARAgUi\\"
+permit = [
+    "@native",
+    "@self",
+    "BEAR\\ToolUse\\",
+    "NaokiTsuchiya\\BEARAgUi\\Input\\",
+    "NaokiTsuchiya\\BEARAgUi\\Adapter\\",
+    "NaokiTsuchiya\\BEARAgUi\\ToolUse\\",
+    "NaokiTsuchiya\\BEARAgUi\\Event\\",
 ]
