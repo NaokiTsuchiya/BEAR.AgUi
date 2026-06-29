@@ -7,6 +7,7 @@ namespace NaokiTsuchiya\BEARAgUi\Input\Parser;
 use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 use NaokiTsuchiya\BEARAgUi\Input\Message\ReasoningMessage;
 use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Input\Result;
 
 /**
  * Validates the body of a ReasoningMessage. Called by {@see MessageParser}
@@ -20,14 +21,18 @@ final class ReasoningMessageParser implements MessageVariantParser
     /**
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
+     *
+     * @return Result<ReasoningMessage, ParseError>
      */
-    public static function parseBody(string $id, array $data): ReasoningMessage|ParseError
+    public static function parseBody(string $id, array $data): Result
     {
         $content = RequireStringContent::from($data);
-        if ($content instanceof ParseError) {
-            return $content;
+        if (!$content->isOk()) {
+            return Result::err($content->unwrapErr());
         }
 
-        return new ReasoningMessage($id, $content, Coerce::nullableString($data['encryptedValue'] ?? null));
+        return Result::ok(
+            new ReasoningMessage($id, $content->unwrap(), Coerce::nullableString($data['encryptedValue'] ?? null)),
+        );
     }
 }

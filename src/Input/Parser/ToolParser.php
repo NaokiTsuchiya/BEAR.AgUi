@@ -6,6 +6,7 @@ namespace NaokiTsuchiya\BEARAgUi\Input\Parser;
 
 use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Input\Result;
 use NaokiTsuchiya\BEARAgUi\Input\Tool;
 
 use function array_key_exists;
@@ -21,28 +22,32 @@ use function array_key_exists;
  */
 final class ToolParser
 {
-    /** @param array<string, mixed> $data */
-    public static function parse(array $data): Tool|ParseError
+    /**
+     * @param array<string, mixed> $data
+     *
+     * @return Result<Tool, ParseError>
+     */
+    public static function parse(array $data): Result
     {
         $name = Coerce::nonEmptyString($data['name'] ?? null);
         if ($name === null) {
-            return new ParseError('name is required');
+            return Result::err(new ParseError('name is required'));
         }
 
         $description = Coerce::nullableString($data['description'] ?? null);
         if ($description === null) {
-            return new ParseError('description is required');
+            return Result::err(new ParseError('description is required'));
         }
 
         if (!array_key_exists('parameters', $data)) {
-            return new ParseError('parameters is required');
+            return Result::err(new ParseError('parameters is required'));
         }
 
         $parameters = Coerce::stringKeyedArray($data['parameters']);
         if ($parameters === null) {
-            return new ParseError('parameters must be a JSON Schema object');
+            return Result::err(new ParseError('parameters must be a JSON Schema object'));
         }
 
-        return new Tool($name, $description, $parameters);
+        return Result::ok(new Tool($name, $description, $parameters));
     }
 }

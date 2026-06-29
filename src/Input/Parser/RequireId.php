@@ -6,6 +6,7 @@ namespace NaokiTsuchiya\BEARAgUi\Input\Parser;
 
 use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Input\Result;
 
 /**
  * Shared `id is required` check used by every per-variant message parser.
@@ -20,15 +21,15 @@ final class RequireId
     /**
      * @param array<string, mixed> $data
      *
-     * @return non-empty-string|ParseError
+     * @return Result<non-empty-string, ParseError>
      */
-    public static function from(array $data): string|ParseError
+    public static function from(array $data): Result
     {
         $id = Coerce::nonEmptyString($data['id'] ?? null);
         if ($id === null) {
-            return new ParseError('id is required');
+            return Result::err(new ParseError('id is required'));
         }
 
-        return $id;
+        return Result::ok($id);
     }
 }

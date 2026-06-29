@@ -6,6 +6,7 @@ namespace NaokiTsuchiya\BEARAgUi\Input\Parser;
 
 use NaokiTsuchiya\BEARAgUi\Input\Message\SystemMessage;
 use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Input\Result;
 
 /**
  * Validates the body of a SystemMessage. Called by {@see MessageParser} with
@@ -18,14 +19,16 @@ final class SystemMessageParser implements MessageVariantParser
     /**
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
+     *
+     * @return Result<SystemMessage, ParseError>
      */
-    public static function parseBody(string $id, array $data): SystemMessage|ParseError
+    public static function parseBody(string $id, array $data): Result
     {
         $content = RequireStringContent::from($data);
-        if ($content instanceof ParseError) {
-            return $content;
+        if (!$content->isOk()) {
+            return Result::err($content->unwrapErr());
         }
 
-        return new SystemMessage($id, $content);
+        return Result::ok(new SystemMessage($id, $content->unwrap()));
     }
 }

@@ -6,16 +6,18 @@ namespace NaokiTsuchiya\BEARAgUi\Input\Parser;
 
 use NaokiTsuchiya\BEARAgUi\Input\Message\Message;
 use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Input\Result;
 
 /**
  * Static-method contract every per-role message parser must satisfy so
  * {@see MessageParser} can dispatch on `role` without each variant drifting
- * from the shared `(id, data) -> Message|ParseError` shape.
+ * from the shared `(id, data) -> Result<Message, ParseError>` shape.
  *
- * Implementations narrow the return type via covariance — e.g. the user
- * parser returns `UserMessage|ParseError` — and PHP enforces the
- * signature at class load, so adding a new variant without implementing
- * this interface is a fatal error rather than a silent dispatch gap.
+ * Implementations narrow the success parameter via {@see Result}'s
+ * covariance — e.g. the user parser returns `Result<UserMessage, ParseError>`
+ * — and PHP enforces the signature at class load, so adding a new variant
+ * without implementing this interface is a fatal error rather than a silent
+ * dispatch gap.
  *
  * @internal
  */
@@ -27,6 +29,8 @@ interface MessageVariantParser
      *
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
+     *
+     * @return Result<Message, ParseError>
      */
-    public static function parseBody(string $id, array $data): Message|ParseError;
+    public static function parseBody(string $id, array $data): Result;
 }

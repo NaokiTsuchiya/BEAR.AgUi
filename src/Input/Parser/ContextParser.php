@@ -7,6 +7,7 @@ namespace NaokiTsuchiya\BEARAgUi\Input\Parser;
 use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 use NaokiTsuchiya\BEARAgUi\Input\Context;
 use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Input\Result;
 
 /**
  * Validates a raw AG-UI `Context` entry. `description` and `value` are both
@@ -16,19 +17,23 @@ use NaokiTsuchiya\BEARAgUi\Input\ParseError;
  */
 final class ContextParser
 {
-    /** @param array<string, mixed> $data */
-    public static function parse(array $data): Context|ParseError
+    /**
+     * @param array<string, mixed> $data
+     *
+     * @return Result<Context, ParseError>
+     */
+    public static function parse(array $data): Result
     {
         $description = Coerce::nullableString($data['description'] ?? null);
         if ($description === null) {
-            return new ParseError('description is required');
+            return Result::err(new ParseError('description is required'));
         }
 
         $value = Coerce::nullableString($data['value'] ?? null);
         if ($value === null) {
-            return new ParseError('value is required');
+            return Result::err(new ParseError('value is required'));
         }
 
-        return new Context($description, $value);
+        return Result::ok(new Context($description, $value));
     }
 }

@@ -8,6 +8,7 @@ use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 use NaokiTsuchiya\BEARAgUi\Input\Message\ToolMessage;
 use NaokiTsuchiya\BEARAgUi\Input\Message\ToolOutcome;
 use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Input\Result;
 
 use function array_key_exists;
 
@@ -28,16 +29,18 @@ final class ToolMessageParser implements MessageVariantParser
     /**
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
+     *
+     * @return Result<ToolMessage, ParseError>
      */
-    public static function parseBody(string $id, array $data): ToolMessage|ParseError
+    public static function parseBody(string $id, array $data): Result
     {
         $toolCallId = Coerce::nonEmptyString($data['toolCallId'] ?? null);
         if ($toolCallId === null) {
-            return new ParseError('toolCallId is required');
+            return Result::err(new ParseError('toolCallId is required'));
         }
 
         if (!array_key_exists('content', $data)) {
-            return new ParseError('content is required');
+            return Result::err(new ParseError('content is required'));
         }
 
         $content = $data['content'];
@@ -46,6 +49,6 @@ final class ToolMessageParser implements MessageVariantParser
             ? ToolOutcome::failure($content, Coerce::string($data['error']))
             : ToolOutcome::success($content);
 
-        return new ToolMessage($id, $toolCallId, $outcome);
+        return Result::ok(new ToolMessage($id, $toolCallId, $outcome));
     }
 }

@@ -8,6 +8,7 @@ use JsonException;
 use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 use NaokiTsuchiya\BEARAgUi\Input\Message\AssistantToolCall;
 use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Input\Result;
 
 use function array_key_exists;
 use function is_array;
@@ -31,55 +32,60 @@ use const JSON_THROW_ON_ERROR;
  */
 final class AssistantToolCallParser
 {
-    /** @param array<string, mixed> $data */
-    public static function parse(array $data): AssistantToolCall|ParseError
+    /**
+     * @param array<string, mixed> $data
+     *
+     * @return Result<AssistantToolCall, ParseError>
+     */
+    public static function parse(array $data): Result
     {
         $id = RequireId::from($data);
-        if ($id instanceof ParseError) {
-            return $id;
+        if (!$id->isOk()) {
+            return Result::err($id->unwrapErr());
         }
 
+        $idValue = $id->unwrap();
         $function = $data['function'] ?? null;
         if (!is_array($function)) {
-            return new ParseError('function is required');
+            return Result::err(new ParseError('function is required'));
         }
 
         $name = Coerce::nonEmptyString($function['name'] ?? null);
         if ($name === null) {
-            return new ParseError('function.name is required');
+            return Result::err(new ParseError('function.name is required'));
         }
 
         if (!array_key_exists('arguments', $function)) {
-            return new ParseError('function.arguments is required');
+            return Result::err(new ParseError('function.arguments is required'));
         }
 
         $arguments = self::decodeArguments($function['arguments']);
-        if ($arguments instanceof ParseError) {
-            return $arguments;
+        if (!$arguments->isOk()) {
+            return Result::err($arguments->unwrapErr());
         }
 
-        return new AssistantToolCall($id, $name, $arguments);
+        return Result::ok(new AssistantToolCall($idValue, $name, $arguments->unwrap()));
     }
 
-    /** @return array<string, mixed>|ParseError */
-    private static function decodeArguments(mixed $raw): array|ParseError
+    /** @return Result<array<string, mixed>, ParseError> */
+    private static function decodeArguments(mixed $raw): Result
     {
         if (!is_string($raw)) {
-            return new ParseError('function.arguments must be a string');
+            return Result::err(new ParseError('function.arguments must be a string'));
         }
 
         try {
             /** @var mixed $decoded */
             $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
-            return new ParseError('function.arguments is not valid JSON: ' . $e->getMessage());
+            return Result::err(new ParseError('function.arguments is not valid JSON: ' . $e->getMessage()));
         }
 
         $args = Coerce::stringKeyedArray($decoded);
         if ($args === null) {
-            return new ParseError('function.arguments must decode to a JSON object');
+            return Result::err(new ParseError('function.arguments must decode to a JSON object'));
         }
 
-        return $args;
+        return Result::ok($args);
     }
 }

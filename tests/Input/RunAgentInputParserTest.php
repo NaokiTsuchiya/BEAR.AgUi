@@ -17,13 +17,13 @@ use function array_map;
  * providers would obscure which contract is failing.
  */
 #[CoversClass(RunAgentInputParser::class)]
+#[CoversClass(Result::class)]
 final class RunAgentInputParserTest extends TestCase
 {
     public function testParsesMinimalValidBody(): void
     {
-        $input = self::parse('Input/minimal.json');
+        $input = self::parseOk('Input/minimal.json');
 
-        static::assertInstanceOf(RunAgentInput::class, $input);
         static::assertSame('t-1', $input->threadId);
         static::assertSame('r-1', $input->runId);
         static::assertSame('hi', $input->userMessage);
@@ -35,9 +35,8 @@ final class RunAgentInputParserTest extends TestCase
 
     public function testAcceptsOptionalFields(): void
     {
-        $input = self::parse('Input/full.json');
+        $input = self::parseOk('Input/full.json');
 
-        static::assertInstanceOf(RunAgentInput::class, $input);
         static::assertSame(['search'], $input->declaredToolNames);
         static::assertSame('d', $input->context[0]->description);
         static::assertSame('v', $input->context[0]->value);
@@ -51,9 +50,8 @@ final class RunAgentInputParserTest extends TestCase
 
     public function testSplitsTriggerFromHistory(): void
     {
-        $input = self::parse('Input/history-before-trigger.json');
+        $input = self::parseOk('Input/history-before-trigger.json');
 
-        static::assertInstanceOf(RunAgentInput::class, $input);
         static::assertSame('second', $input->userMessage);
         static::assertSame(
             ['user', 'assistant'],
@@ -63,18 +61,18 @@ final class RunAgentInputParserTest extends TestCase
 
     public function testReturnsParseErrorForNonObjectBody(): void
     {
-        $errors = (new RunAgentInputParser())->parse('"not an object"');
+        $result = (new RunAgentInputParser())->parse('"not an object"');
 
-        static::assertIsArray($errors);
-        static::assertStringContainsString('must be a JSON object', $errors[0]->message);
+        static::assertFalse($result->isOk());
+        static::assertStringContainsString('must be a JSON object', $result->unwrapErr()[0]->message);
     }
 
     public function testReturnsParseErrorForInvalidJson(): void
     {
-        $errors = (new RunAgentInputParser())->parse('{not json');
+        $result = (new RunAgentInputParser())->parse('{not json');
 
-        static::assertIsArray($errors);
-        static::assertStringStartsWith('Invalid JSON', $errors[0]->message);
+        static::assertFalse($result->isOk());
+        static::assertStringStartsWith('Invalid JSON', $result->unwrapErr()[0]->message);
     }
 
     public function testReturnsParseErrorForMissingThreadId(): void
@@ -161,9 +159,8 @@ final class RunAgentInputParserTest extends TestCase
 
     public function testProjectsUserMessageInputContentArrayToText(): void
     {
-        $input = self::parse('Input/user-message-with-input-content.json');
+        $input = self::parseOk('Input/user-message-with-input-content.json');
 
-        static::assertInstanceOf(RunAgentInput::class, $input);
         static::assertSame('describe this', $input->userMessage);
     }
 
@@ -186,19 +183,24 @@ final class RunAgentInputParserTest extends TestCase
         static::assertCount(2, $messages);
     }
 
-    private static function parse(string $fixture): RunAgentInput|array
+    private static function parseOk(string $fixture): RunAgentInput
     {
-        return (new RunAgentInputParser())->parse(JsonFixture::load($fixture));
+        $result = (new RunAgentInputParser())->parse(JsonFixture::load($fixture));
+        static::assertTrue($result->isOk());
+
+        return $result->unwrap();
     }
 
     /** @return list<ParseError> */
     private static function errors(string $fixture): array
     {
-        $result = self::parse($fixture);
-        static::assertIsArray($result);
-        static::assertNotEmpty($result);
+        $result = (new RunAgentInputParser())->parse(JsonFixture::load($fixture));
+        static::assertFalse($result->isOk());
 
-        return $result;
+        $errors = $result->unwrapErr();
+        static::assertNotEmpty($errors);
+
+        return $errors;
     }
 
     private static function firstError(string $fixture): ParseError

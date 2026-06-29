@@ -30,15 +30,15 @@ use const JSON_THROW_ON_ERROR;
  * parser is the single place that knows that VO's wire shape; this class
  * never reaches into a VO field directly.
  *
- * Failures flow through the return type as a **non-empty `list<ParseError>`**
- * (the parser is total — no exceptions). Errors are *aggregated* across the
- * independent siblings — `threadId`, `runId`, and each entry of
- * `messages[]` / `tools[]` / `context[]` / `resume[]` — so the host can
- * report every structural problem at once (D24, level ii). Each per-entry
- * error carries its structural path (e.g. the message that is missing a
- * `toolCallId`). Short-circuiting is limited to the two true dependencies:
- * a JSON decode failure (no structure left to inspect) and the trigger
- * split (which needs a cleanly parsed message list).
+ * Failures flow through a {@see Result} carrying a **non-empty
+ * `list<ParseError>`** (the parser is total — no exceptions). Errors are
+ * *aggregated* across the independent siblings — `threadId`, `runId`, and
+ * each entry of `messages[]` / `tools[]` / `context[]` / `resume[]` — so the
+ * host can report every structural problem at once (D24, level ii). Each
+ * per-entry error carries its structural path (e.g. the message that is
+ * missing a `toolCallId`). Short-circuiting is limited to the two true
+ * dependencies: a JSON decode failure (no structure left to inspect) and
+ * the trigger split (which needs a cleanly parsed message list).
  *
  * @mago-expect lint:cyclomatic-complexity
  * @mago-expect lint:kan-defect
@@ -55,16 +55,16 @@ final class RunAgentInputParser
      * Parse the body into a run-ready {@see RunAgentInput}, or a non-empty
      * `list<ParseError>` aggregating every structural problem.
      *
-     * Callers discriminate on the type: `is_array($result)` means failure.
-     *
-     * @return RunAgentInput|list<ParseError>
+     * @return Result<RunAgentInput, list<ParseError>>
      */
-    public function parse(string $body): RunAgentInput|array
+    public function parse(string $body): Result
     {
-        $data = self::decode($body);
-        if ($data instanceof ParseError) {
-            return [$data];
+        $decoded = self::decode($body);
+        if (!$decoded->isOk()) {
+            return Result::err([$decoded->unwrapErr()]);
         }
+
+        $data = $decoded->unwrap();
 
         $threadId = Coerce::nonEmptyString($data['threadId'] ?? null);
         $runId = Coerce::nonEmptyString($data['runId'] ?? null);
@@ -91,28 +91,30 @@ final class RunAgentInputParser
         // error, so the list is non-empty) but let the analyzer carry
         // threadId / runId as non-empty strings into the constructor below.
         if ($errors !== [] || $threadId === null || $runId === null) {
-            return $errors;
+            return Result::err($errors);
         }
 
         // Dependent step: the trigger split needs a cleanly parsed message
         // list, so its "non-empty user message required" check can only run
         // once the siblings above are clean.
         $trigger = self::splitTrigger($messages);
-        if ($trigger instanceof ParseError) {
-            return [$trigger];
+        if (!$trigger->isOk()) {
+            return Result::err([$trigger->unwrapErr()]);
         }
 
-        return new RunAgentInput(
+        $triggerValue = $trigger->unwrap();
+
+        return Result::ok(new RunAgentInput(
             threadId: $threadId,
             runId: $runId,
-            userMessage: $trigger['userMessage'],
-            history: $trigger['history'],
+            userMessage: $triggerValue['userMessage'],
+            history: $triggerValue['history'],
             declaredToolNames: array_map(static fn(Tool $tool): string => $tool->name, $tools),
             context: $context,
             state: Coerce::assocOrNull($data['state'] ?? null),
             forwardedProps: Coerce::assoc($data['forwardedProps'] ?? null),
             resume: $resume,
-        );
+        ));
     }
 
     /**
@@ -122,9 +124,9 @@ final class RunAgentInputParser
      *
      * @param list<Message> $messages
      *
-     * @return array{userMessage: non-empty-string, history: list<Message>}|ParseError
+     * @return Result<array{userMessage: non-empty-string, history: list<Message>}, ParseError>
      */
-    private static function splitTrigger(array $messages): array|ParseError
+    private static function splitTrigger(array $messages): Result
     {
         $userMessage = null;
         $historyEnd = 0;
@@ -136,10 +138,10 @@ final class RunAgentInputParser
         }
 
         if ($userMessage === null || $userMessage === '') {
-            return new ParseError('messages[] must contain a user message with text content.');
+            return Result::err(new ParseError('messages[] must contain a user message with text content.'));
         }
 
-        return ['userMessage' => $userMessage, 'history' => array_slice($messages, 0, $historyEnd)];
+        return Result::ok(['userMessage' => $userMessage, 'history' => array_slice($messages, 0, $historyEnd)]);
     }
 
     /**
@@ -158,21 +160,21 @@ final class RunAgentInputParser
         return self::mapList('messages', $raw, MessageParser::parse(...));
     }
 
-    /** @return array<array-key, mixed>|ParseError */
-    private static function decode(string $body): array|ParseError
+    /** @return Result<array<array-key, mixed>, ParseError> */
+    private static function decode(string $body): Result
     {
         try {
             /** @var mixed $data */
             $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
-            return new ParseError('Invalid JSON: ' . $e->getMessage());
+            return Result::err(new ParseError('Invalid JSON: ' . $e->getMessage()));
         }
 
         if (!is_array($data)) {
-            return new ParseError('RunAgentInput must be a JSON object.');
+            return Result::err(new ParseError('RunAgentInput must be a JSON object.'));
         }
 
-        return $data;
+        return Result::ok($data);
     }
 
     /**
@@ -184,7 +186,7 @@ final class RunAgentInputParser
      *
      * @template T of object
      *
-     * @param Closure(array<string, mixed>): (T|ParseError) $parse
+     * @param Closure(array<string, mixed>): Result<T, ParseError> $parse
      *
      * @return array{list<T>, list<ParseError>}
      */
@@ -194,13 +196,13 @@ final class RunAgentInputParser
         $errors = [];
         foreach (Coerce::listOfObjects($raw) as $index => $entry) {
             $result = $parse($entry);
-            if ($result instanceof ParseError) {
-                $errors[] = $result->prefix("{$field}[{$index}]");
+            if (!$result->isOk()) {
+                $errors[] = $result->unwrapErr()->prefix("{$field}[{$index}]");
 
                 continue;
             }
 
-            $values[] = $result;
+            $values[] = $result->unwrap();
         }
 
         return [$values, $errors];

@@ -7,6 +7,7 @@ namespace NaokiTsuchiya\BEARAgUi\Input\Parser;
 use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 use NaokiTsuchiya\BEARAgUi\Input\Message\AssistantMessage;
 use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Input\Result;
 
 /**
  * Validates the body of an AssistantMessage. Called by {@see MessageParser}
@@ -23,19 +24,21 @@ final class AssistantMessageParser implements MessageVariantParser
     /**
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
+     *
+     * @return Result<AssistantMessage, ParseError>
      */
-    public static function parseBody(string $id, array $data): AssistantMessage|ParseError
+    public static function parseBody(string $id, array $data): Result
     {
         $toolCalls = [];
         foreach (Coerce::listOfObjects($data['toolCalls'] ?? []) as $index => $rawCall) {
             $call = AssistantToolCallParser::parse($rawCall);
-            if ($call instanceof ParseError) {
-                return $call->prefix("toolCalls[{$index}]");
+            if (!$call->isOk()) {
+                return Result::err($call->unwrapErr()->prefix("toolCalls[{$index}]"));
             }
 
-            $toolCalls[] = $call;
+            $toolCalls[] = $call->unwrap();
         }
 
-        return new AssistantMessage($id, Coerce::nullableString($data['content'] ?? null), $toolCalls);
+        return Result::ok(new AssistantMessage($id, Coerce::nullableString($data['content'] ?? null), $toolCalls));
     }
 }

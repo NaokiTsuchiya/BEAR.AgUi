@@ -7,14 +7,15 @@ namespace NaokiTsuchiya\BEARAgUi\Input\Parser;
 use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 use NaokiTsuchiya\BEARAgUi\Input\Message\Message;
 use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Input\Result;
 
 /**
  * Routes a raw AG-UI message array to the per-variant parser keyed on
  * `role`. The common `id is required` check (D8 — `id` is mandatory for
  * every variant) runs first, so each `parseBody()` only worries about the
  * role-specific shape. Variants implement {@see MessageVariantParser},
- * so PHP locks the dispatcher's expected `(id, data) -> Message|ParseError`
- * signature at class load.
+ * so PHP locks the dispatcher's expected
+ * `(id, data) -> Result<Message, ParseError>` signature at class load.
  *
  * Unknown / missing roles return a {@see ParseError} (HTTP 400). Silently
  * dropping them would hide client typos (`"userr"`) as data loss; the
@@ -25,25 +26,32 @@ use NaokiTsuchiya\BEARAgUi\Input\ParseError;
  */
 final class MessageParser
 {
-    /** @param array<string, mixed> $data */
-    public static function parse(array $data): Message|ParseError
+    /**
+     * @param array<string, mixed> $data
+     *
+     * @return Result<Message, ParseError>
+     */
+    public static function parse(array $data): Result
     {
         $id = RequireId::from($data);
-        if ($id instanceof ParseError) {
-            return $id;
+        if (!$id->isOk()) {
+            return Result::err($id->unwrapErr());
         }
 
+        $idValue = $id->unwrap();
         $role = Coerce::nullableString($data['role'] ?? null);
 
         return match ($role) {
-            'user' => UserMessageParser::parseBody($id, $data),
-            'assistant' => AssistantMessageParser::parseBody($id, $data),
-            'tool' => ToolMessageParser::parseBody($id, $data),
-            'system' => SystemMessageParser::parseBody($id, $data),
-            'developer' => DeveloperMessageParser::parseBody($id, $data),
-            'activity' => ActivityMessageParser::parseBody($id, $data),
-            'reasoning' => ReasoningMessageParser::parseBody($id, $data),
-            default => new ParseError("role '" . ($role ?? '') . "' is not a recognized AG-UI message role"),
+            'user' => UserMessageParser::parseBody($idValue, $data),
+            'assistant' => AssistantMessageParser::parseBody($idValue, $data),
+            'tool' => ToolMessageParser::parseBody($idValue, $data),
+            'system' => SystemMessageParser::parseBody($idValue, $data),
+            'developer' => DeveloperMessageParser::parseBody($idValue, $data),
+            'activity' => ActivityMessageParser::parseBody($idValue, $data),
+            'reasoning' => ReasoningMessageParser::parseBody($idValue, $data),
+            default => Result::err(
+                new ParseError("role '" . ($role ?? '') . "' is not a recognized AG-UI message role"),
+            ),
         };
     }
 }
