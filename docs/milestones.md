@@ -82,17 +82,43 @@ poc の実証済み層を本体 `src/`・`tests/` へ移植し、実 `bear/tool-
 **DoD**: `composer tests`（mago + phpmd + phpunit unit/integration）と `composer crc` がグリーン。結合テストが
 CI で決定論的にグリーン。
 
-## M3 — example②：BEAR.Sunday ショーケースアプリ
+## M3 — example②：BEAR.Sunday ショーケースアプリ（resource-as-tool ＋ ALPS）
 
-本番想定の **BEAR.Sunday アプリ**として作り込み、BEAR での組み方を示す。
+> **詳細タスク**: [`tasks-m3.md`](tasks-m3.md)（ファイル/クラス/メソッド粒度・先行スパイク S-a/S-b あり）
 
-- `/invocations` を薄いハンドラ（or リソース）で結線し `AgUiRunner` を駆動、`/ping`
-- DI Module：スコープを正しく束縛（[architecture](architecture.md) §2）。**app 単一**＝factory/encoder/logger、
-  **per-request**＝`SseSinkInterface`、**per-run**＝registry/agent/adapter。`InstrumentedAgentFactory` は
-  アプリの本物 LLM/Dispatcher を包む実装を束縛
-- ストリーミングは通常レンダラを通さず `SseResponder` で配信（body=値 の前提と衝突させない）
+本番想定の **BEAR.Sunday アプリ**として作り込み、BEAR での組み方を示す。狙いは **単一エージェントが
+BEAR リソースをツールとして呼び、ALPS でツールを統治しつつ、その出力を AG-UI イベントとして SSE 逐次配信する**
+こと。M2（フレームワーク非依存・固定値ツール）には無い **resource-as-tool ＋ ALPS ＋ BEAR ネイティブ SSE** を
+初めて実物で示す（ADR 0001/0004/0006）。
 
-**DoD**: 実 BEAR アプリとして起動し `/invocations` が SSE 逐次返す。
+前提：M1 で `AgUiRunner::stream(RunAgentInput): iterable<AgUiEventInterface>` は完成済み（D23）。
+**M3 は M1 を一切改造せず**、`stream()` を消費する側に徹する。
+
+- **入口は ResourceObject**（薄いハンドラ案は却下＝中身が M2 と同化するため）。`Invocations`（`POST`）＋ `Ping`（`GET`）。
+  `Invocations::onPost()` が入力を**検証**し、成功時のみ `stream()` の generator を body に置く
+- **SSE 配送＝自前 `SseTransfer`（`TransferInterface`）**。`$runner->stream($input)` を pull し、フレーム毎に
+  `SseEncoder` で枠付けして `flush`。**属性スコープ（`#[SseStream]` 等）で `Invocations` だけに当てる**ので
+  `/ping`・検証失敗の 400 は標準経路のまま（D23：SSE 化・I/O は host=配送層の関心事）。`bear/streamer` を使う
+  pull 配送は**スコープ外＝将来チャレンジ**
+- **ツールは BEAR リソース**。`bear/tool-use` の `Dispatcher` / `ToolRegistry` / `ToolCollector` / `#[Tool]` を
+  **そのまま使う**（自前ディスパッチャはゼロ）。`#[Tool]` を付けたリソースを書き、起動時に
+  `ToolCollector->collect([uris])` で registry 充填＋ツール宣言を導出（宣言と実装がリソース 1 箇所に集約）
+- **エージェントは本格構成**：`bear/tool-use` の `AgentFactory` 上に **custom `InstrumentedAgentFactory`** を実装し、
+  per-run で `RecordingStreamingLlmClient` / `RecordingDispatcher` を配線（S5）。collect は起動時 1 回・per-run は
+  `addTools()` で使い回す。実 LLM は M2 の OpenAI 変換層を流用。**subagent（`AgentPool`）は使わない**（AG-UI の焦点をぼかすため）
+- **ALPS を統治に使う**：リソースの ALPS プロファイルを書き、`bear/tool-use` 供給の `AlpsToolPolicyInputProcessor`
+  （`safeOnly()` 等）と `AlpsContextInputProcessor` を `AgUiRunner.$inputProcessors` 経由で回す（ADR 0004 の
+  「情報設計 ALPS → アフォーダンス → AG-UI」）。ALPS ツール供給自体は `bear/tool-use` 本体の責務（スコープ外・下記）
+- **DI Module**：app 単一＝factory / encoder / logger / adapter / `SseTransfer` / 実 LLM・Dispatcher、registry/agent は
+  `stream()` 内で per-run に `new`（DI スコープではない）。`ToolUseModule` ＋ BEAR `ResourceModule` を install
+
+**先行スパイク（tasks-m3 執筆の前提条件）**:
+
+- **S-a**：`$ro->body` に `Generator` を置いて BEAR 標準経路が壊さないか（[ADR0001 のメモ](adr/0000-0006-ag-ui-support.md)
+  「専用 `StreamedResourceObject` 拡張が要るかも・要検証」）。NG なら拡張が必要＝M3 の骨格が変わる
+- **S-b**：検証失敗が `#[SseStream]` を持たない error リソース経由で標準 400 になるか（属性スコープ方式の確認）
+
+**DoD**: 実 BEAR アプリとして起動し `/invocations` が SSE 逐次返す（手動 smoke）。`composer tests` グリーン。
 
 ---
 
