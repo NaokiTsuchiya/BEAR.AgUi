@@ -222,3 +222,32 @@
   現状パーサは `T|ParseError` のユニット返却で **fail-fast**（最初の `ParseError` で打ち切り）。`@template` な
   `Result<T,E>` を導入して (a) パーサ各所のユニット + `Input/Message/ToolOutcome` を統一し、(b) パースを
   **全 ParseError をパス付きで集約**する方式へ変更し、host が全不備を一度に報告できるようにする。M1 PR とは別 PR で対応。
+
+- **D25 (M3) `確定` BEAR アプリの入口は ResourceObject、SSE 配送は `Invocations::transfer()` オーバーライド**（T0 スパイクで
+  実機確認済み）。`/invocations` を薄いハンドラに逃がす案は却下（中身が M2 と同化するため）。`Invocations` が `onPost` で
+  `RunAgentInputParser::parse()` を回し、成功時のみ `AgUiRunner::stream()` の `iterable<AgUiEventInterface>` を `$ro->body` に置く。
+  `transfer(TransferInterface $responder, array $server)` を上書きして body 型で分岐：Generator → M1 既存の `SseResponder` +
+  `PhpSapiSseSink` で配送（SSE 枠付け/flush は再実装しない）、配列（ping/検証失敗の 400）→ 渡された標準 responder へ委譲。
+  **専用 `SseTransfer` クラスも `#[SseStream]` 属性束縛も不要**：`ResourceObject::transfer()` は `$responder($this,$server)` に
+  委譲するだけでレンダリング（`toString()`→`JsonRenderer`）は responder 内で遅延発火するため、上書きすれば標準フローは generator を
+  触らない（`StreamedResourceObject` 拡張も不要＝ADR0001 の懸念は解消）。`bear/streamer` は `stream_copy_to_stream` による
+  ファイル差し込み用で `flush()` 無し・body は配列/stream リソース前提のため **SSE には不適**（将来でも採用しない）。
+
+- **D26 (M3) `確定` ツールは `bear/tool-use` の resource 駆動機構をそのまま使用、エージェントは bundled `StreamingAgentFactory`**。
+  tool 名→リソース写像・ツール宣言導出は本体の `Dispatcher` / `ToolRegistry` / `ToolCollector` / `#[Tool]` が担う＝**自前
+  ディスパッチャゼロ**。`#[Tool]` を付けたリソースを書き、起動時に `ToolCollector->collect([uris])` で registry 充填＋宣言導出。
+  M1 の `StreamingAgentFactory` が recording デコレータ配線（D10）を内蔵するため、**custom `InstrumentedAgentFactory` も
+  `AgentFactory`/`AgentPool` も不要**：Provider が collect 済みツールと resource 駆動 `Dispatcher` を `StreamingAgentFactory`
+  に渡すだけ。
+
+- **D27 (M3) `確定` ALPS 統治を M3 で実物化、subagent は不採用**。`AlpsSemanticDictionary(profilePath)` を `alps/profile.xml`
+  から構築し、`AlpsToolPolicyInputProcessor::safeAndIdempotent()` ＋ `AlpsContextInputProcessor` を `AgUiRunner.$inputProcessors`
+  へ。3 ツール（safe `weather_get`=通常 / unsafe `message_post`=ポリシー締め出し / idempotent `reminder_put`=confirm→interrupt）で
+  「ガバナンスによる締め出し」と「confirm→interrupt」を**同じ run で両立**させる（`safeOnly` だと unsafe を消すため confirm デモが
+  発火しない衝突を、`safeAndIdempotent` ＋ idempotent×confirm ツールで解消）。`AgentPool`/subagent は AG-UI の焦点をぼかすため
+  不採用。ALPS ツール**供給**自体は `bear/tool-use` 本体の責務（ライブラリのスコープ外・ADR0004）。
+
+- **D28 (M3) `確定` example の OpenAI 変換層は `example/shared/`（`Example\Shared\`）に置き M2/M3 で共有**。M2 の素サーバと M3 の
+  BEAR アプリが同じ `OpenAiStreamingLlmClient` / mappers を使うため、`example/server/` 直下ではなく共有ディレクトリに置いて
+  example→example の結合を避ける。BEAR.Sunday 非依存に保つ（`bear/tool-use` 型のみ依存）。本物/スタブ切替は `OPENAI_BASE_URL`
+  env のみ（D18）。
