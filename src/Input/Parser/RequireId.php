@@ -21,13 +21,13 @@ final class RequireId
     /**
      * @param array<string, mixed> $data
      *
-     * @return Result<non-empty-string, ParseError>
+     * @return Result<non-empty-string, list<ParseError>>
      */
     public static function from(array $data): Result
     {
         $id = Coerce::nonEmptyString($data['id'] ?? null);
         if ($id === null) {
-            return Result::err(new ParseError('id is required'));
+            return Result::err([new ParseError('id is required')]);
         }
 
         return Result::ok($id);

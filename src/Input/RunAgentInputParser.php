@@ -61,7 +61,7 @@ final class RunAgentInputParser
     {
         $decoded = self::decode($body);
         if (!$decoded->isOk()) {
-            return Result::err([$decoded->unwrapErr()]);
+            return Result::err($decoded->unwrapErr());
         }
 
         $data = $decoded->unwrap();
@@ -99,7 +99,7 @@ final class RunAgentInputParser
         // once the siblings above are clean.
         $trigger = self::splitTrigger($messages);
         if (!$trigger->isOk()) {
-            return Result::err([$trigger->unwrapErr()]);
+            return Result::err($trigger->unwrapErr());
         }
 
         $triggerValue = $trigger->unwrap();
@@ -124,7 +124,7 @@ final class RunAgentInputParser
      *
      * @param list<Message> $messages
      *
-     * @return Result<array{userMessage: non-empty-string, history: list<Message>}, ParseError>
+     * @return Result<array{userMessage: non-empty-string, history: list<Message>}, list<ParseError>>
      */
     private static function splitTrigger(array $messages): Result
     {
@@ -138,7 +138,7 @@ final class RunAgentInputParser
         }
 
         if ($userMessage === null || $userMessage === '') {
-            return Result::err(new ParseError('messages[] must contain a user message with text content.'));
+            return Result::err([new ParseError('messages[] must contain a user message with text content.')]);
         }
 
         return Result::ok(['userMessage' => $userMessage, 'history' => array_slice($messages, 0, $historyEnd)]);
@@ -160,18 +160,18 @@ final class RunAgentInputParser
         return self::mapList('messages', $raw, MessageParser::parse(...));
     }
 
-    /** @return Result<array<array-key, mixed>, ParseError> */
+    /** @return Result<array<array-key, mixed>, list<ParseError>> */
     private static function decode(string $body): Result
     {
         try {
             /** @var mixed $data */
             $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
-            return Result::err(new ParseError('Invalid JSON: ' . $e->getMessage()));
+            return Result::err([new ParseError('Invalid JSON: ' . $e->getMessage())]);
         }
 
         if (!is_array($data)) {
-            return Result::err(new ParseError('RunAgentInput must be a JSON object.'));
+            return Result::err([new ParseError('RunAgentInput must be a JSON object.')]);
         }
 
         return Result::ok($data);
@@ -186,7 +186,7 @@ final class RunAgentInputParser
      *
      * @template T of object
      *
-     * @param Closure(array<string, mixed>): Result<T, ParseError> $parse
+     * @param Closure(array<string, mixed>): Result<T, list<ParseError>> $parse
      *
      * @return array{list<T>, list<ParseError>}
      */
@@ -197,7 +197,9 @@ final class RunAgentInputParser
         foreach (Coerce::listOfObjects($raw) as $index => $entry) {
             $result = $parse($entry);
             if (!$result->isOk()) {
-                $errors[] = $result->unwrapErr()->prefix("{$field}[{$index}]");
+                foreach ($result->unwrapErr() as $error) {
+                    $errors[] = $error->prefix("{$field}[{$index}]");
+                }
 
                 continue;
             }

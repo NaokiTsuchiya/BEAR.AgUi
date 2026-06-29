@@ -30,7 +30,7 @@ interface MessageVariantParser
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
      *
-     * @return Result<Message, ParseError>
+     * @return Result<Message, list<ParseError>>
      */
     public static function parseBody(string $id, array $data): Result;
 }

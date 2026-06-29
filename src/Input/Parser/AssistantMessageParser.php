@@ -25,18 +25,27 @@ final class AssistantMessageParser implements MessageVariantParser
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
      *
-     * @return Result<AssistantMessage, ParseError>
+     * @return Result<AssistantMessage, list<ParseError>>
      */
     public static function parseBody(string $id, array $data): Result
     {
         $toolCalls = [];
+        $errors = [];
         foreach (Coerce::listOfObjects($data['toolCalls'] ?? []) as $index => $rawCall) {
             $call = AssistantToolCallParser::parse($rawCall);
             if (!$call->isOk()) {
-                return Result::err($call->unwrapErr()->prefix("toolCalls[{$index}]"));
+                foreach ($call->unwrapErr() as $error) {
+                    $errors[] = $error->prefix("toolCalls[{$index}]");
+                }
+
+                continue;
             }
 
             $toolCalls[] = $call->unwrap();
+        }
+
+        if ($errors !== []) {
+            return Result::err($errors);
         }
 
         return Result::ok(new AssistantMessage($id, Coerce::nullableString($data['content'] ?? null), $toolCalls));

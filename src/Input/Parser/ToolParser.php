@@ -25,27 +25,33 @@ final class ToolParser
     /**
      * @param array<string, mixed> $data
      *
-     * @return Result<Tool, ParseError>
+     * @return Result<Tool, list<ParseError>>
      */
     public static function parse(array $data): Result
     {
+        $errors = [];
+
         $name = Coerce::nonEmptyString($data['name'] ?? null);
         if ($name === null) {
-            return Result::err(new ParseError('name is required'));
+            $errors[] = new ParseError('name is required');
         }
 
         $description = Coerce::nullableString($data['description'] ?? null);
         if ($description === null) {
-            return Result::err(new ParseError('description is required'));
+            $errors[] = new ParseError('description is required');
         }
 
-        if (!array_key_exists('parameters', $data)) {
-            return Result::err(new ParseError('parameters is required'));
-        }
-
-        $parameters = Coerce::stringKeyedArray($data['parameters']);
+        $parameters = Coerce::stringKeyedArray($data['parameters'] ?? null);
         if ($parameters === null) {
-            return Result::err(new ParseError('parameters must be a JSON Schema object'));
+            $errors[] = new ParseError(
+                array_key_exists('parameters', $data)
+                    ? 'parameters must be a JSON Schema object'
+                    : 'parameters is required',
+            );
+        }
+
+        if ($errors !== [] || $name === null || $description === null || $parameters === null) {
+            return Result::err($errors);
         }
 
         return Result::ok(new Tool($name, $description, $parameters));

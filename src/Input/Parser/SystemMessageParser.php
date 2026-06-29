@@ -20,7 +20,7 @@ final class SystemMessageParser implements MessageVariantParser
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
      *
-     * @return Result<SystemMessage, ParseError>
+     * @return Result<SystemMessage, list<ParseError>>
      */
     public static function parseBody(string $id, array $data): Result
     {

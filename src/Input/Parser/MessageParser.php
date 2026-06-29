@@ -29,7 +29,7 @@ final class MessageParser
     /**
      * @param array<string, mixed> $data
      *
-     * @return Result<Message, ParseError>
+     * @return Result<Message, list<ParseError>>
      */
     public static function parse(array $data): Result
     {
@@ -49,9 +49,9 @@ final class MessageParser
             'developer' => DeveloperMessageParser::parseBody($idValue, $data),
             'activity' => ActivityMessageParser::parseBody($idValue, $data),
             'reasoning' => ReasoningMessageParser::parseBody($idValue, $data),
-            default => Result::err(
-                new ParseError("role '" . ($role ?? '') . "' is not a recognized AG-UI message role"),
-            ),
+            default => Result::err([new ParseError(
+                "role '" . ($role ?? '') . "' is not a recognized AG-UI message role",
+            )]),
         };
     }
 }

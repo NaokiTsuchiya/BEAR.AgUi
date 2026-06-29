@@ -23,12 +23,12 @@ final class RequireStringContent
     /**
      * @param array<string, mixed> $data
      *
-     * @return Result<string, ParseError>
+     * @return Result<string, list<ParseError>>
      */
     public static function from(array $data): Result
     {
         if (!array_key_exists('content', $data) || !is_string($data['content'])) {
-            return Result::err(new ParseError('content is required'));
+            return Result::err([new ParseError('content is required')]);
         }
 
         return Result::ok($data['content']);

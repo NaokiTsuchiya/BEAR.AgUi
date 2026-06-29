@@ -37,12 +37,12 @@ final class UserMessageParser implements MessageVariantParser
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
      *
-     * @return Result<UserMessage, ParseError>
+     * @return Result<UserMessage, list<ParseError>>
      */
     public static function parseBody(string $id, array $data): Result
     {
         if (!array_key_exists('content', $data)) {
-            return Result::err(new ParseError('content is required'));
+            return Result::err([new ParseError('content is required')]);
         }
 
         $content = $data['content'];
@@ -51,7 +51,7 @@ final class UserMessageParser implements MessageVariantParser
         }
 
         if (!is_array($content)) {
-            return Result::err(new ParseError('content must be a string or InputContent[]'));
+            return Result::err([new ParseError('content must be a string or InputContent[]')]);
         }
 
         return Result::ok(new UserMessage($id, self::projectText($content)));

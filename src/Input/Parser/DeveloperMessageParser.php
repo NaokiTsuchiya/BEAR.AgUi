@@ -20,7 +20,7 @@ final class DeveloperMessageParser implements MessageVariantParser
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
      *
-     * @return Result<DeveloperMessage, ParseError>
+     * @return Result<DeveloperMessage, list<ParseError>>
      */
     public static function parseBody(string $id, array $data): Result
     {

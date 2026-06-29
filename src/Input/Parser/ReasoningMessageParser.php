@@ -22,7 +22,7 @@ final class ReasoningMessageParser implements MessageVariantParser
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
      *
-     * @return Result<ReasoningMessage, ParseError>
+     * @return Result<ReasoningMessage, list<ParseError>>
      */
     public static function parseBody(string $id, array $data): Result
     {

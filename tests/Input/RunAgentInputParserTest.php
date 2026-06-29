@@ -183,6 +183,15 @@ final class RunAgentInputParserTest extends TestCase
         static::assertCount(2, $messages);
     }
 
+    public function testAggregatesMultipleErrorsWithinOneEntry(): void
+    {
+        $messages = self::errorMessages('Input/activity-missing-type-and-content.json');
+
+        static::assertContains('messages[1].activityType is required', $messages);
+        static::assertContains('messages[1].content is required', $messages);
+        static::assertCount(2, $messages);
+    }
+
     private static function parseOk(string $fixture): RunAgentInput
     {
         $result = (new RunAgentInputParser())->parse(JsonFixture::load($fixture));

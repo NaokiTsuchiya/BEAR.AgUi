@@ -24,22 +24,26 @@ final class ActivityMessageParser implements MessageVariantParser
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
      *
-     * @return Result<ActivityMessage, ParseError>
+     * @return Result<ActivityMessage, list<ParseError>>
      */
     public static function parseBody(string $id, array $data): Result
     {
+        $errors = [];
+
         $activityType = Coerce::nonEmptyString($data['activityType'] ?? null);
         if ($activityType === null) {
-            return Result::err(new ParseError('activityType is required'));
+            $errors[] = new ParseError('activityType is required');
         }
 
-        if (!array_key_exists('content', $data)) {
-            return Result::err(new ParseError('content is required'));
-        }
-
-        $content = Coerce::stringKeyedArray($data['content']);
+        $content = Coerce::stringKeyedArray($data['content'] ?? null);
         if ($content === null) {
-            return Result::err(new ParseError('content must be a string-keyed object'));
+            $errors[] = new ParseError(
+                array_key_exists('content', $data) ? 'content must be a string-keyed object' : 'content is required',
+            );
+        }
+
+        if ($errors !== [] || $activityType === null || $content === null) {
+            return Result::err($errors);
         }
 
         return Result::ok(new ActivityMessage($id, $activityType, $content));

@@ -30,17 +30,24 @@ final class ToolMessageParser implements MessageVariantParser
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
      *
-     * @return Result<ToolMessage, ParseError>
+     * @return Result<ToolMessage, list<ParseError>>
      */
     public static function parseBody(string $id, array $data): Result
     {
+        $errors = [];
+
         $toolCallId = Coerce::nonEmptyString($data['toolCallId'] ?? null);
         if ($toolCallId === null) {
-            return Result::err(new ParseError('toolCallId is required'));
+            $errors[] = new ParseError('toolCallId is required');
         }
 
-        if (!array_key_exists('content', $data)) {
-            return Result::err(new ParseError('content is required'));
+        $hasContent = array_key_exists('content', $data);
+        if (!$hasContent) {
+            $errors[] = new ParseError('content is required');
+        }
+
+        if ($errors !== [] || $toolCallId === null || !$hasContent) {
+            return Result::err($errors);
         }
 
         $content = $data['content'];

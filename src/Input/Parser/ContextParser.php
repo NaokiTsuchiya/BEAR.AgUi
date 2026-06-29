@@ -20,18 +20,24 @@ final class ContextParser
     /**
      * @param array<string, mixed> $data
      *
-     * @return Result<Context, ParseError>
+     * @return Result<Context, list<ParseError>>
      */
     public static function parse(array $data): Result
     {
+        $errors = [];
+
         $description = Coerce::nullableString($data['description'] ?? null);
         if ($description === null) {
-            return Result::err(new ParseError('description is required'));
+            $errors[] = new ParseError('description is required');
         }
 
         $value = Coerce::nullableString($data['value'] ?? null);
         if ($value === null) {
-            return Result::err(new ParseError('value is required'));
+            $errors[] = new ParseError('value is required');
+        }
+
+        if ($errors !== [] || $description === null || $value === null) {
+            return Result::err($errors);
         }
 
         return Result::ok(new Context($description, $value));

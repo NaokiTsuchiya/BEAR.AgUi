@@ -20,18 +20,24 @@ final class ResumeParser
     /**
      * @param array<string, mixed> $data
      *
-     * @return Result<Resume, ParseError>
+     * @return Result<Resume, list<ParseError>>
      */
     public static function parse(array $data): Result
     {
+        $errors = [];
+
         $interruptId = Coerce::nonEmptyString($data['interruptId'] ?? null);
         if ($interruptId === null) {
-            return Result::err(new ParseError('interruptId is required'));
+            $errors[] = new ParseError('interruptId is required');
         }
 
         $status = Coerce::nonEmptyString($data['status'] ?? null);
         if ($status === null) {
-            return Result::err(new ParseError('status is required'));
+            $errors[] = new ParseError('status is required');
+        }
+
+        if ($errors !== [] || $interruptId === null || $status === null) {
+            return Result::err($errors);
         }
 
         return Result::ok(new Resume($interruptId, $status, $data['payload'] ?? null));
