@@ -221,11 +221,17 @@
 - **D24 `確定` パースエラーを集約し、Result 化は spike ゲート後段で**（task list #10・ユーザー明示要望）。
   旧パーサは `T|ParseError` のユニット返却で **fail-fast**（最初の `ParseError` で打ち切り）だった。grilling で
   設計を以下に締め、`feature/d24-parse-aggregation` ブランチで **A→B を実装済み**（末尾「実装」参照）。
-  - **集約スコープ = level ii（到達可能な独立兄弟は全部）**：`validateRequired` の3項目 +
-    `messages`/`tools`/`context`/`resume` の4リストを*全部*走らせ、各 ParseError を path 付きで連結する。
-    短絡は2箇所だけ：`decode`（JSON 壊れ=構造が無く1件で停止）と `splitTrigger`（messages が綺麗に
-    パースできた時のみ実行。「user メッセージ必須」エラーは条件付きで欠落）。∴「全部入り」ではなく
-    「到達可能な独立兄弟は全部」。`mapList` は最初の `ParseError` で `return` せず全エントリ分を収集する形に変える。
+  - **集約スコープ = level i + ii（到達可能な独立兄弟は全部）**：`threadId`/`runId` +
+    `messages`/`tools`/`context`/`resume` の4リストを*全部*走らせ、各 ParseError を path 付きで連結する（ii）。
+    さらに**各エントリ内の独立フィールドも集約**（i）：1つの message/tool が複数フィールドを欠いていれば
+    まとめて返す（例 activity の `activityType` と `content` の両方）。短絡は2箇所と**エントリ内の依存サブ
+    チェック**だけ：`decode`（JSON 壊れ=1件で停止）/ `splitTrigger`（messages が綺麗にパースできた時のみ）/
+    依存関係（例 `content must be a string-keyed object` は content 存在が前提）。`mapList` は最初の
+    `ParseError` で `return` せず全エントリ分を収集。
+    - **(i) は後から追加**：当初は ii 限定だったが、`ActivityMessageParser` 等が複数独立フィールドを短絡して
+      いたため (i) も入れた。実装上は **leaf の error 型を `Result<T, list<ParseError>>` に統一**（leaf も
+      orchestrator も `list<ParseError>`＝混在解消）し、複数フィールド parser は no-else の累積 +
+      narrowing ガード（`if ($errors !== [] || $a === null || ...) return Result::err($errors);`）で組む。
   - **価値の主体（正直版）**：不正な AG-UI クライアントをデバッグする**開発者の DX** ＋ protocol エラー面の
     見通し。「機械クライアントが N 件まとめて自動修正する」とは主張しない（生成元は機械でフォーム入力者では
     ないため）。fail-fast か集約かは YAGNI ではなく**エラーハンドリング方針**の選択として集約を採る。
@@ -253,11 +259,12 @@
     無く独自拡張になる。ライブラリは `parse()` が `list<ParseError>`（各 `message` + path）を返すところまで担い、
     形（例 `{code, errors:[{path, message}]}`）への直列化は host の関心事（D25 の `Invocations::transfer()` が
     配列分岐で 400 を返す経路）。
-  - **実装（`feature/d24-parse-aggregation`）**：A=`Aggregate input parse errors instead of failing fast`、
-    B=`Introduce Result<T,E> and replace the parser unions`。`Input\Result<T,E>`（covariant 両引数・
-    ok/err/isOk/unwrap/unwrapErr）を追加し、leaf パーサ全てを `Result<T, ParseError>`、`parse()` を
-    `Result<RunAgentInput, list<ParseError>>` に。集約テスト2本追加（独立兄弟跨ぎ / リスト内跨ぎ）。
-    pin 版 mago 1.40.1 で `composer tests`（83 tests / 308 assertions）＋ `composer crc` グリーン。
+  - **実装（`feature/d24-parse-aggregation`・3+1 コミット）**：A=`Aggregate input parse errors instead of
+    failing fast`(ii)、B=`Introduce Result<T,E> and replace the parser unions`、
+    `Aggregate independent field errors within each entry (level i)`。`Input\Result<T,E>`（covariant 両引数・
+    ok/err/isOk/unwrap/unwrapErr）を追加し、leaf パーサ全てを `Result<T, list<ParseError>>`、`parse()` を
+    `Result<RunAgentInput, list<ParseError>>` に。集約テスト3本（独立兄弟跨ぎ / リスト内跨ぎ / エントリ内）。
+    pin 版 mago 1.40.1 で `composer tests`（84 tests / 313 assertions）＋ `composer crc` グリーン。
 
 - **D25 (M3) `確定` BEAR アプリの入口は ResourceObject、SSE 配送は `Invocations::transfer()` オーバーライド**（T0 スパイクで
   実機確認済み）。`/invocations` を薄いハンドラに逃がす案は却下（中身が M2 と同化するため）。`Invocations` が `onPost` で
