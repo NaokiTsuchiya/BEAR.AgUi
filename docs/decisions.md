@@ -218,7 +218,32 @@
     （旧 `create`）、既定実装は `StreamingAgentFactory`（旧 `DefaultInstrumentedAgentFactory`）。→ D14/D15/D16 の名称を改訂。
   - **エラー二分法は不変**：parse/接続失敗＝`ParseError`→HTTP 400（`stream()` 前）／実行中失敗＝`RUN_ERROR`（開いた 200 上）。
 
-- **D24 `保留` 汎用 `Result<T,E>` でパース結果を集約**（task list #10・ユーザー明示要望）。
-  現状パーサは `T|ParseError` のユニット返却で **fail-fast**（最初の `ParseError` で打ち切り）。`@template` な
-  `Result<T,E>` を導入して (a) パーサ各所のユニット + `Input/Message/ToolOutcome` を統一し、(b) パースを
-  **全 ParseError をパス付きで集約**する方式へ変更し、host が全不備を一度に報告できるようにする。M1 PR とは別 PR で対応。
+- **D24 `保留` パースエラーを集約し、Result 化は spike ゲート後段で**（task list #10・ユーザー明示要望）。
+  現状パーサは `T|ParseError` のユニット返却で **fail-fast**（最初の `ParseError` で打ち切り）。grilling で
+  設計を以下に締めた。M1 PR とは別 PR で対応。
+  - **集約スコープ = level ii（到達可能な独立兄弟は全部）**：`validateRequired` の3項目 +
+    `messages`/`tools`/`context`/`resume` の4リストを*全部*走らせ、各 ParseError を path 付きで連結する。
+    短絡は2箇所だけ：`decode`（JSON 壊れ=構造が無く1件で停止）と `splitTrigger`（messages が綺麗に
+    パースできた時のみ実行。「user メッセージ必須」エラーは条件付きで欠落）。∴「全部入り」ではなく
+    「到達可能な独立兄弟は全部」。`mapList` は最初の `ParseError` で `return` せず全エントリ分を収集する形に変える。
+  - **価値の主体（正直版）**：不正な AG-UI クライアントをデバッグする**開発者の DX** ＋ protocol エラー面の
+    見通し。「機械クライアントが N 件まとめて自動修正する」とは主張しない（生成元は機械でフォーム入力者では
+    ないため）。fail-fast か集約かは YAGNI ではなく**エラーハンドリング方針**の選択として集約を採る。
+  - **2ステップに分割（A → B）**：
+    - **(A) error 型を単数→複数化 + 集約**：各 parser を `T | list<ParseError>` 返しにする。**ユーザーが欲しい
+      集約はここで実現**し、低リスクで先に出せる（generic Result 非依存）。
+    - **(B) 汎用 `Result<T,E>` ラッパーを (A) の上に被せる**：ad-hoc ユニオンに「失敗しうる計算」という単一語彙を
+      与える趣味判断。**(A) の後段**でのみ実施。
+  - **B のゲート = mago の generics / assert 対応を spike で実測（→ 実測済み・GREEN）**：当初「mago は `Result` を
+    ナローできず無チェック `unwrap` 散乱でユニオン下位互換」と懸念したが、spike（`@template` な `Result<T>` +
+    `@psalm-assert-if-true`）で **mago は (1) ジェネリクスを `Result<T>->unwrap()` 経由で貫通させ（`string` を
+    `int` 引数へ渡すと検出）、(2) `@psalm-assert-if-true` で `string|int`→`string` にナローする**ことを確認。
+    よって B は技術的に viable。残課題は `unwrap()` を Err 上で呼ぶ実行時安全のみ（Ok/Err 分割等で設計時に詰める。
+    ゲート不成立ではない）。
+  - **`ToolOutcome` は統合対象外**（当初文面 (a) から除外）：`ToolOutcome` は成功/失敗で別ペイロードの和型では
+    なく、両ケースで `content` を持つ**判別子つき積型**（[`Input/Message/ToolOutcome.php`](../src/Input/Message/ToolOutcome.php)
+    の `failure(content, error)`）。和型 `Result<T,E>` に入れると「失敗でも content」不変条件が壊れる。除外根拠は
+    「形」であって「parse error でないから」ではない（generic Result の E は何でもよい）。
+  - **未決（A 着手時に確定）**：複数エラーの **400 レスポンスエンベロープ**。AG-UI 仕様に複数エラー定義は無く
+    独自拡張になる。形（例 `{code, errors:[{path, message}]}`）を A の中で決める。現状の `ParseError` は単一
+    `message` + `prefix()` なので、`list<ParseError>` を運ぶ集約点と 400 シリアライズを A で追加する。
