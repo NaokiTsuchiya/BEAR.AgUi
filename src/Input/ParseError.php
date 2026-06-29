@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace NaokiTsuchiya\BEARAgUi\Input;
 
 /**
- * Failure outcome from {@see RunAgentInputParser::parse()} or
- * {@see RunAgentInput::lastUserMessage()}.
+ * One structural failure at the input boundary, carrying a human-readable
+ * `message` and (via {@see prefix()}) the path to the offending field.
  *
- * Returned in a union (`RunAgentInput|ParseError`, `string|ParseError`) so
- * input-boundary failures flow through the type system instead of exception
- * channels. Maps to a connection-level HTTP 400 in
- * {@see \NaokiTsuchiya\BEARAgUi\AgUiRunner} (ADR 0001) — distinct from
- * RUN_ERROR mid-stream.
+ * {@see RunAgentInputParser::parse()} aggregates these into a non-empty
+ * `list<ParseError>` and returns it in a union (`RunAgentInput|list<ParseError>`)
+ * so input-boundary failures flow through the type system instead of
+ * exception channels (D24). The host maps a returned list to a
+ * connection-level HTTP 400 (ADR 0001) — distinct from RUN_ERROR mid-stream.
  *
  * @api
  */
