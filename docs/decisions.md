@@ -276,3 +276,32 @@
   BEAR アプリが同じ `OpenAiStreamingLlmClient` / mappers を使うため、`example/server/` 直下ではなく共有ディレクトリに置いて
   example→example の結合を避ける。BEAR.Sunday 非依存に保つ（`bear/tool-use` 型のみ依存）。本物/スタブ切替は `OPENAI_BASE_URL`
   env のみ（D18）。
+
+- **D29 (M3) `確定` 複数ツールの非同期並列実行を Swoole で自前実装（上流を待たない）**。詳細タスクは
+  [`tasks-parallel-tools.md`](tasks-parallel-tools.md)。先行スパイク **S-c** で技術検証済み（結論を以下に反映）。
+  - **決定 = 並列ループをこのリポジトリで実装**。`bear/tool-use` への `dispatchBatch` seam 追加（上流PR）は待てないため、
+    `OptionAwareStreamingAgentInterface` を実装する自前 **`ParallelStreamingAgent`** を **`src/Runtime/`**（ライブラリ第一級機能）に置く。
+  - **なぜ自前ループが必須か（S-c で実証）**：seam は `DispatcherInterface` ではなく**ループ内**にある。コルーチン対応 Dispatcher を
+    注入しても本物の `StreamingAgent` は並列化しなかった（2×200ms ツールで 403ms＝逐次）。`dispatchPendingToolCalls()` が
+    `dispatch()` を1個ずつ inline で await し（[`StreamingAgent.php:195`](../vendor/bear/tool-use/src/Runtime/StreamingAgent.php)）、
+    かつ `StreamingAgent` は `final` でサブクラス不可のため。
+  - **新規コードは dispatch fan-out のみ（≈30行）**。reason/act ループの他部品（`StreamContentAccumulator` / `StreamIterationState` /
+    `ToolList` / `Message` / `LlmRequest` / `AgentOptions` / `AgentEvent` / `PendingToolCall`）は**全 public・`@internal` 無し**で再利用。
+    S-c part3 で実 Fake LLM（1ターン3ツール）を流し 202ms（逐次なら 600ms）・`tool_start=3/tool_result=3/completed=1` を実測。
+  - **並列ポリシー**：confirm なし＝`Swoole\Coroutine\WaitGroup` で並列／confirm 付き＝直列（`yield CONFIRMATION_REQUIRED` +
+    `Generator::send(bool)` で HITL 維持）。S-c part1 T3 で 3並列＋1直列 confirm を実証。
+  - **ランタイム＝Swoole 前提だが本体の「ランタイム非依存」性は壊さない**：`WaitGroup` はコルーチン文脈を要するため M3 は Swoole
+    HTTP サーバで駆動（`php -S` 手動 smoke 経路を置換）。ただし Swoole は **`require-dev` + `suggest`**（hard `require` にしない）。
+    既定は逐次 `StreamingAgent` のまま残し、`ParallelStreamingAgent` は **opt-in**。`src/` 本体の `require` は `psr/log` + `bear/tool-use`
+    据え置き（D7 不変条件を維持）。
+  - **前提改修2件（実装前に潰す・tasks 化）**：
+    - **(a) recording 層の id 帰属**：`ToolCallRegistry` の FIFO 対応づけ（D9）は並列実行で壊れる。**tool id キー**へ変更し
+      `RecordingDispatcher`/`ToolCallRegistry` をコルーチン安全にする。これは milestones スコープ外だった「複数ツールの `toolCallId`
+      対応づけ」（[`milestones.md`](milestones.md) 旧スコープ外）を **in-scope 化**する。
+    - **(b) BEAR.Resource のコルーチン安全性**：`Swoole\Runtime::enableCoroutine()` のフック範囲、DI シングルトン/共有可変状態の
+      レース。**先行スパイク S-d で基本成立を確認**（`Swoole\Http\Server` → `ResourceInterface` を per-request coroutine + `WaitGroup` で
+      並列 dispatch し wall-clock 201ms＝overlap・同一 worker でクラッシュ無し・SSE 逐次配信 OK）。⚠️ 検証は単純リソース2本＝**複雑な DI
+      シングルトンのレースは本番リソースで再確認**（残課題・[`tasks-parallel-tools.md`](tasks-parallel-tools.md) T5 B / tasks-m3 T0'）。
+  - **コスト（受容）**：reason/act ループのフォーク＝`bear/tool-use` 追従ドリフト。バージョン pin と差分監視で管理。
+  - **スパイク資産**：scratchpad の `spike_swoole_parallel_tools.php` / `spike_real_agent_seam.php` / `spike_parallel_agent_impl.php`。
+    プロジェクト慣例（tasks-m3 T0）に従い**コミットせず破棄**。
