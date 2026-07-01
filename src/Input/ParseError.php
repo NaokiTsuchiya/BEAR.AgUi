@@ -9,7 +9,8 @@ namespace NaokiTsuchiya\BEARAgUi\Input;
  * `message` and (via {@see prefix()}) the path to the offending field.
  *
  * {@see RunAgentInputParser::parse()} aggregates these into a non-empty
- * `list<ParseError>` and returns it in a union (`RunAgentInput|list<ParseError>`)
+ * `list<ParseError>` and returns it as the error side of a
+ * `Result<RunAgentInput, list<ParseError>>`
  * so input-boundary failures flow through the type system instead of
  * exception channels (D24). The host maps a returned list to a
  * connection-level HTTP 400 (ADR 0001) — distinct from RUN_ERROR mid-stream.

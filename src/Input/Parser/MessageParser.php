@@ -15,7 +15,7 @@ use NaokiTsuchiya\BEARAgUi\Input\Result;
  * every variant) runs first, so each `parseBody()` only worries about the
  * role-specific shape. Variants implement {@see MessageVariantParser},
  * so PHP locks the dispatcher's expected
- * `(id, data) -> Result<Message, ParseError>` signature at class load.
+ * `(id, data) -> Result<Message, list<ParseError>>` signature at class load.
  *
  * Unknown / missing roles return a {@see ParseError} (HTTP 400). Silently
  * dropping them would hide client typos (`"userr"`) as data loss; the

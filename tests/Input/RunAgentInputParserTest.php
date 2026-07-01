@@ -192,6 +192,51 @@ final class RunAgentInputParserTest extends TestCase
         static::assertCount(2, $messages);
     }
 
+    public function testAggregatesToolFieldErrors(): void
+    {
+        $messages = self::errorMessages('Input/tool-missing-name-and-parameters.json');
+
+        static::assertContains('tools[0].name is required', $messages);
+        static::assertContains('tools[0].parameters is required', $messages);
+        static::assertCount(2, $messages);
+    }
+
+    public function testAggregatesContextFieldErrors(): void
+    {
+        $messages = self::errorMessages('Input/context-missing-both.json');
+
+        static::assertContains('context[0].description is required', $messages);
+        static::assertContains('context[0].value is required', $messages);
+        static::assertCount(2, $messages);
+    }
+
+    public function testAggregatesResumeFieldErrors(): void
+    {
+        $messages = self::errorMessages('Input/resume-missing-both.json');
+
+        static::assertContains('resume[0].interruptId is required', $messages);
+        static::assertContains('resume[0].status is required', $messages);
+        static::assertCount(2, $messages);
+    }
+
+    public function testAggregatesToolMessageFieldErrors(): void
+    {
+        $messages = self::errorMessages('Input/tool-message-missing-both.json');
+
+        static::assertContains('messages[1].toolCallId is required', $messages);
+        static::assertContains('messages[1].content is required', $messages);
+        static::assertCount(2, $messages);
+    }
+
+    public function testAggregatesAssistantToolCallFieldErrors(): void
+    {
+        $messages = self::errorMessages('Input/assistant-tool-call-missing-id-and-name.json');
+
+        static::assertContains('messages[1].toolCalls[0].id is required', $messages);
+        static::assertContains('messages[1].toolCalls[0].function.name is required', $messages);
+        static::assertCount(2, $messages);
+    }
+
     private static function parseOk(string $fixture): RunAgentInput
     {
         $result = (new RunAgentInputParser())->parse(JsonFixture::load($fixture));

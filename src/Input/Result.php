@@ -4,23 +4,27 @@ declare(strict_types=1);
 
 namespace NaokiTsuchiya\BEARAgUi\Input;
 
+use LogicException;
+
 /**
  * Outcome of a fallible computation: a success value `T` or a failure `E`.
  *
  * Gives the input-parsing pipeline a single vocabulary for "this either
  * produced a value or a {@see ParseError}" instead of ad-hoc `T|ParseError`
- * unions (D24 step B). The leaf parsers use `Result<T, ParseError>`; the
- * orchestrator's public boundary uses `Result<RunAgentInput,
- * list<ParseError>>` once the per-sibling errors are aggregated.
+ * unions (D24 step B). The error side is uniformly a `list<ParseError>`: the
+ * leaf parsers return `Result<T, list<ParseError>>` (each entry aggregates
+ * its own independent field errors), and the orchestrator's public boundary
+ * returns `Result<RunAgentInput, list<ParseError>>` once the per-sibling
+ * lists are merged.
  *
  * Both type parameters are covariant so {@see ok()} / {@see err()} — which
  * only know one side — unify with a declared `Result<T, E>`, and a
- * `Result<UserMessage, ParseError>` satisfies a `Result<Message, ParseError>`
- * return contract.
+ * `Result<UserMessage, list<ParseError>>` satisfies a
+ * `Result<Message, list<ParseError>>` return contract.
  *
  * Consumption is by convention: check {@see isOk()} first, then read
  * {@see unwrap()} (success) or {@see unwrapErr()} (failure). Reading the
- * wrong side is a programmer error, not a checked one.
+ * wrong side is a programmer error and throws {@see LogicException}.
  *
  * @template-covariant T
  * @template-covariant E
@@ -69,23 +73,33 @@ final readonly class Result
     }
 
     /**
-     * The success value. Only meaningful when {@see isOk()} is true.
+     * The success value. Throws if this is an error result — check
+     * {@see isOk()} first.
      *
      * @return T
      */
     public function unwrap(): mixed
     {
+        if (!$this->ok) {
+            throw new LogicException('Result::unwrap() called on an error result.');
+        }
+
         /** @var T */
         return $this->value;
     }
 
     /**
-     * The failure value. Only meaningful when {@see isOk()} is false.
+     * The failure value. Throws if this is a success result — check
+     * {@see isOk()} first.
      *
      * @return E
      */
     public function unwrapErr(): mixed
     {
+        if ($this->ok) {
+            throw new LogicException('Result::unwrapErr() called on a success result.');
+        }
+
         /** @var E */
         return $this->error;
     }

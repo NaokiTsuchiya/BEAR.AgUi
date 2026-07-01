@@ -24,7 +24,7 @@ use function is_string;
  * the parser joins `type:"text"` parts with `\n` and silently drops non-
  * text parts (image/file). The empty-text case is intentionally allowed
  * here — only the response-trigger user message (caught by
- * {@see \NaokiTsuchiya\BEARAgUi\Input\RunAgentInput::lastUserMessage()})
+ * {@see \NaokiTsuchiya\BEARAgUi\Input\RunAgentInputParser::splitTrigger()})
  * needs to be promoted to HTTP 400.
  *
  * Called by {@see MessageParser} with the already-validated `id`.

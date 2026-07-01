@@ -11,10 +11,10 @@ use NaokiTsuchiya\BEARAgUi\Input\Result;
 /**
  * Static-method contract every per-role message parser must satisfy so
  * {@see MessageParser} can dispatch on `role` without each variant drifting
- * from the shared `(id, data) -> Result<Message, ParseError>` shape.
+ * from the shared `(id, data) -> Result<Message, list<ParseError>>` shape.
  *
  * Implementations narrow the success parameter via {@see Result}'s
- * covariance — e.g. the user parser returns `Result<UserMessage, ParseError>`
+ * covariance — e.g. the user parser returns `Result<UserMessage, list<ParseError>>`
  * — and PHP enforces the signature at class load, so adding a new variant
  * without implementing this interface is a fatal error rather than a silent
  * dispatch gap.

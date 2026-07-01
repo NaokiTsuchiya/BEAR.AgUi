@@ -14,8 +14,9 @@ use NaokiTsuchiya\BEARAgUi\Input\Result;
  * with the already-validated `id`. `content` and `toolCalls` are both
  * optional (an "empty" assistant turn is technically legal and gets
  * skipped downstream by the history mapper). Each `toolCalls[]` entry is
- * validated by {@see AssistantToolCallParser}; a malformed entry aborts
- * with a `toolCalls[N].<field>` path.
+ * validated by {@see AssistantToolCallParser}; each malformed entry
+ * contributes a `toolCalls[N].<field>` error; all entries are visited and
+ * the errors aggregated.
  *
  * @internal
  */
