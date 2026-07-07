@@ -7,6 +7,7 @@ namespace NaokiTsuchiya\BEARAgUi\Input\Parser;
 use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 use NaokiTsuchiya\BEARAgUi\Input\Message\ActivityMessage;
 use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Input\Result;
 
 use function array_key_exists;
 
@@ -22,23 +23,29 @@ final class ActivityMessageParser implements MessageVariantParser
     /**
      * @param non-empty-string     $id
      * @param array<string, mixed> $data
+     *
+     * @return Result<ActivityMessage, list<ParseError>>
      */
-    public static function parseBody(string $id, array $data): ActivityMessage|ParseError
+    public static function parseBody(string $id, array $data): Result
     {
+        $errors = [];
+
         $activityType = Coerce::nonEmptyString($data['activityType'] ?? null);
         if ($activityType === null) {
-            return new ParseError('activityType is required');
+            $errors[] = new ParseError('activityType is required');
         }
 
-        if (!array_key_exists('content', $data)) {
-            return new ParseError('content is required');
-        }
-
-        $content = Coerce::stringKeyedArray($data['content']);
+        $content = Coerce::stringKeyedArray($data['content'] ?? null);
         if ($content === null) {
-            return new ParseError('content must be a string-keyed object');
+            $errors[] = new ParseError(
+                array_key_exists('content', $data) ? 'content must be a string-keyed object' : 'content is required',
+            );
         }
 
-        return new ActivityMessage($id, $activityType, $content);
+        if ($errors !== [] || $activityType === null || $content === null) {
+            return Result::err($errors);
+        }
+
+        return Result::ok(new ActivityMessage($id, $activityType, $content));
     }
 }

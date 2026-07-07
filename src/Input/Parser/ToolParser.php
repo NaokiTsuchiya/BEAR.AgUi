@@ -6,6 +6,7 @@ namespace NaokiTsuchiya\BEARAgUi\Input\Parser;
 
 use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Input\Result;
 use NaokiTsuchiya\BEARAgUi\Input\Tool;
 
 use function array_key_exists;
@@ -21,28 +22,38 @@ use function array_key_exists;
  */
 final class ToolParser
 {
-    /** @param array<string, mixed> $data */
-    public static function parse(array $data): Tool|ParseError
+    /**
+     * @param array<string, mixed> $data
+     *
+     * @return Result<Tool, list<ParseError>>
+     */
+    public static function parse(array $data): Result
     {
+        $errors = [];
+
         $name = Coerce::nonEmptyString($data['name'] ?? null);
         if ($name === null) {
-            return new ParseError('name is required');
+            $errors[] = new ParseError('name is required');
         }
 
         $description = Coerce::nullableString($data['description'] ?? null);
         if ($description === null) {
-            return new ParseError('description is required');
+            $errors[] = new ParseError('description is required');
         }
 
-        if (!array_key_exists('parameters', $data)) {
-            return new ParseError('parameters is required');
-        }
-
-        $parameters = Coerce::stringKeyedArray($data['parameters']);
+        $parameters = Coerce::stringKeyedArray($data['parameters'] ?? null);
         if ($parameters === null) {
-            return new ParseError('parameters must be a JSON Schema object');
+            $errors[] = new ParseError(
+                array_key_exists('parameters', $data)
+                    ? 'parameters must be a JSON Schema object'
+                    : 'parameters is required',
+            );
         }
 
-        return new Tool($name, $description, $parameters);
+        if ($errors !== [] || $name === null || $description === null || $parameters === null) {
+            return Result::err($errors);
+        }
+
+        return Result::ok(new Tool($name, $description, $parameters));
     }
 }

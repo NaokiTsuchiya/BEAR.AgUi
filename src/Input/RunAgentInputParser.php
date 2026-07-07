@@ -14,6 +14,7 @@ use NaokiTsuchiya\BEARAgUi\Input\Parser\ResumeParser;
 use NaokiTsuchiya\BEARAgUi\Input\Parser\ToolParser;
 
 use function array_map;
+use function array_merge;
 use function array_slice;
 use function is_array;
 use function json_decode;
@@ -29,74 +30,91 @@ use const JSON_THROW_ON_ERROR;
  * parser is the single place that knows that VO's wire shape; this class
  * never reaches into a VO field directly.
  *
- * Failures flow through the return type as {@see ParseError} (the parser
- * is total — no exceptions). Per-entry errors carry their structural path
- * (e.g. `messages[2].toolCallId is required`).
+ * Failures flow through a {@see Result} carrying a **non-empty
+ * `list<ParseError>`** (the parser is total — no exceptions). Errors are
+ * *aggregated* across the independent siblings — `threadId`, `runId`, and
+ * each entry of `messages[]` / `tools[]` / `context[]` / `resume[]` — so the
+ * host can report every structural problem at once (D24, level ii). Each
+ * per-entry error carries its structural path (e.g. the message that is
+ * missing a `toolCallId`). Short-circuiting is limited to the two true
+ * dependencies: a JSON decode failure (no structure left to inspect) and
+ * the trigger split (which needs a cleanly parsed message list).
  *
  * @mago-expect lint:cyclomatic-complexity
  * @mago-expect lint:kan-defect
  *
- * Each helper is short and single-purpose; the class CC / defect score is
- * the price of the no-throw Result pipeline (decode → validateRequired →
- * map each list → split trigger → build), where every step short-circuits
- * on a ParseError.
+ * The class CC / defect score is the price of the no-throw aggregation
+ * pipeline (decode → collect required + map each list → split trigger),
+ * where only decode and the trigger split short-circuit.
  *
  * @internal
  */
 final class RunAgentInputParser
 {
-    public function parse(string $body): RunAgentInput|ParseError
+    /**
+     * Parse the body into a run-ready {@see RunAgentInput}, or a non-empty
+     * `list<ParseError>` aggregating every structural problem.
+     *
+     * @return Result<RunAgentInput, list<ParseError>>
+     */
+    public function parse(string $body): Result
     {
-        $data = self::decode($body);
-        if ($data instanceof ParseError) {
-            return $data;
+        $decoded = self::decode($body);
+        if (!$decoded->isOk()) {
+            return Result::err($decoded->unwrapErr());
         }
 
-        $required = self::validateRequired($data);
-        if ($required instanceof ParseError) {
-            return $required;
+        $data = $decoded->unwrap();
+
+        $threadId = Coerce::nonEmptyString($data['threadId'] ?? null);
+        $runId = Coerce::nonEmptyString($data['runId'] ?? null);
+
+        $errors = [];
+        if ($threadId === null) {
+            $errors[] = new ParseError("Missing or invalid 'threadId'.");
         }
 
-        $messages = self::mapList('messages', $data['messages'], MessageParser::parse(...));
-        if ($messages instanceof ParseError) {
-            return $messages;
+        if ($runId === null) {
+            $errors[] = new ParseError("Missing or invalid 'runId'.");
         }
 
-        $tools = self::mapList('tools', $data['tools'] ?? [], ToolParser::parse(...));
-        if ($tools instanceof ParseError) {
-            return $tools;
+        [$messages, $messageErrors] = self::parseMessages($data['messages'] ?? null);
+        $errors = array_merge($errors, $messageErrors);
+
+        [$tools, $toolErrors] = self::mapList('tools', $data['tools'] ?? [], ToolParser::parse(...));
+        [$context, $contextErrors] = self::mapList('context', $data['context'] ?? [], ContextParser::parse(...));
+        [$resume, $resumeErrors] = self::mapList('resume', $data['resume'] ?? [], ResumeParser::parse(...));
+        $errors = array_merge($errors, $toolErrors, $contextErrors, $resumeErrors);
+
+        // Any independent-sibling failure → report them all. The `=== null`
+        // guards are redundant at runtime (a null scalar already pushed an
+        // error, so the list is non-empty) but let the analyzer carry
+        // threadId / runId as non-empty strings into the constructor below.
+        if ($errors !== [] || $threadId === null || $runId === null) {
+            return Result::err($errors);
         }
 
-        $context = self::mapList('context', $data['context'] ?? [], ContextParser::parse(...));
-        if ($context instanceof ParseError) {
-            return $context;
-        }
-
-        $resume = self::mapList('resume', $data['resume'] ?? [], ResumeParser::parse(...));
-        if ($resume instanceof ParseError) {
-            return $resume;
-        }
-
-        // Split messages[] into the run trigger (latest user message text)
-        // and the prior history. Run-readiness — a non-empty trigger must
-        // exist — is validated here so the host's gate stays at the parse
-        // boundary and RunAgentInput can be pure data.
+        // Dependent step: the trigger split needs a cleanly parsed message
+        // list, so its "non-empty user message required" check can only run
+        // once the siblings above are clean.
         $trigger = self::splitTrigger($messages);
-        if ($trigger instanceof ParseError) {
-            return $trigger;
+        if (!$trigger->isOk()) {
+            return Result::err($trigger->unwrapErr());
         }
 
-        return new RunAgentInput(
-            threadId: $required['threadId'],
-            runId: $required['runId'],
-            userMessage: $trigger['userMessage'],
-            history: $trigger['history'],
+        $triggerValue = $trigger->unwrap();
+
+        return Result::ok(new RunAgentInput(
+            threadId: $threadId,
+            runId: $runId,
+            userMessage: $triggerValue['userMessage'],
+            history: $triggerValue['history'],
             declaredToolNames: array_map(static fn(Tool $tool): string => $tool->name, $tools),
             context: $context,
             state: Coerce::assocOrNull($data['state'] ?? null),
             forwardedProps: Coerce::assoc($data['forwardedProps'] ?? null),
             resume: $resume,
-        );
+        ));
     }
 
     /**
@@ -106,9 +124,9 @@ final class RunAgentInputParser
      *
      * @param list<Message> $messages
      *
-     * @return array{userMessage: non-empty-string, history: list<Message>}|ParseError
+     * @return Result<array{userMessage: non-empty-string, history: list<Message>}, list<ParseError>>
      */
-    private static function splitTrigger(array $messages): array|ParseError
+    private static function splitTrigger(array $messages): Result
     {
         $userMessage = null;
         $historyEnd = 0;
@@ -120,92 +138,75 @@ final class RunAgentInputParser
         }
 
         if ($userMessage === null || $userMessage === '') {
-            return new ParseError('messages[] must contain a user message with text content.');
+            return Result::err([new ParseError('messages[] must contain a user message with text content.')]);
         }
 
-        return ['userMessage' => $userMessage, 'history' => array_slice($messages, 0, $historyEnd)];
+        return Result::ok(['userMessage' => $userMessage, 'history' => array_slice($messages, 0, $historyEnd)]);
     }
 
-    /** @return array<array-key, mixed>|ParseError */
-    private static function decode(string $body): array|ParseError
+    /**
+     * Parse the required `messages[]` list, or report its absence. Kept in
+     * its own helper so {@see parse()} stays free of the present / absent
+     * branch.
+     *
+     * @return array{list<Message>, list<ParseError>}
+     */
+    private static function parseMessages(mixed $raw): array
+    {
+        if (!is_array($raw)) {
+            return [[], [new ParseError("Missing or invalid 'messages'.")]];
+        }
+
+        return self::mapList('messages', $raw, MessageParser::parse(...));
+    }
+
+    /** @return Result<array<array-key, mixed>, list<ParseError>> */
+    private static function decode(string $body): Result
     {
         try {
             /** @var mixed $data */
             $data = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
-            return new ParseError('Invalid JSON: ' . $e->getMessage());
+            return Result::err([new ParseError('Invalid JSON: ' . $e->getMessage())]);
         }
 
         if (!is_array($data)) {
-            return new ParseError('RunAgentInput must be a JSON object.');
+            return Result::err([new ParseError('RunAgentInput must be a JSON object.')]);
         }
 
-        return $data;
+        return Result::ok($data);
     }
 
     /**
-     * @param array<array-key, mixed> $data
-     *
-     * @return array{threadId: string, runId: string}|ParseError
-     */
-    private static function validateRequired(array $data): array|ParseError
-    {
-        $threadId = self::requireString($data, 'threadId');
-        if ($threadId instanceof ParseError) {
-            return $threadId;
-        }
-
-        $runId = self::requireString($data, 'runId');
-        if ($runId instanceof ParseError) {
-            return $runId;
-        }
-
-        if (!is_array($data['messages'] ?? null)) {
-            return new ParseError("Missing or invalid 'messages'.");
-        }
-
-        return ['threadId' => $threadId, 'runId' => $runId];
-    }
-
-    /**
-     * @param array<array-key, mixed> $data
-     *
-     * @return non-empty-string|ParseError
-     */
-    private static function requireString(array $data, string $key): string|ParseError
-    {
-        $value = Coerce::nonEmptyString($data[$key] ?? null);
-        if ($value === null) {
-            return new ParseError("Missing or invalid '{$key}'.");
-        }
-
-        return $value;
-    }
-
-    /**
-     * Coerce `$raw` to a list of object-shaped entries and route each through
-     * `$parse`. A {@see ParseError} from any entry aborts the whole list
-     * with a path-prefixed error so the host can return HTTP 400 with the
-     * exact field location.
+     * Coerce `$raw` to a list of object-shaped entries, route each through
+     * `$parse`, and split the outcomes into the successfully parsed values
+     * and the path-prefixed errors. Unlike a fail-fast map, *every* entry is
+     * visited so the caller can aggregate all errors (D24); a failing entry
+     * is recorded with its `field[index]` path and skipped.
      *
      * @template T of object
      *
-     * @param Closure(array<string, mixed>): (T|ParseError) $parse
+     * @param Closure(array<string, mixed>): Result<T, list<ParseError>> $parse
      *
-     * @return list<T>|ParseError
+     * @return array{list<T>, list<ParseError>}
      */
-    private static function mapList(string $field, mixed $raw, Closure $parse): array|ParseError
+    private static function mapList(string $field, mixed $raw, Closure $parse): array
     {
-        $list = [];
+        $values = [];
+        $errors = [];
         foreach (Coerce::listOfObjects($raw) as $index => $entry) {
-            $value = $parse($entry);
-            if ($value instanceof ParseError) {
-                return $value->prefix("{$field}[{$index}]");
+            $result = $parse($entry);
+            if (!$result->isOk()) {
+                foreach ($result->unwrapErr() as $error) {
+                    $errors[] = $error->prefix("{$field}[{$index}]");
+                }
+
+                continue;
             }
 
-            $list[] = $value;
+            $values[] = $result->unwrap();
         }
 
-        return $list;
+        return [$values, $errors];
     }
 }

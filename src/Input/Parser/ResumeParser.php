@@ -6,6 +6,7 @@ namespace NaokiTsuchiya\BEARAgUi\Input\Parser;
 
 use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 use NaokiTsuchiya\BEARAgUi\Input\ParseError;
+use NaokiTsuchiya\BEARAgUi\Input\Result;
 use NaokiTsuchiya\BEARAgUi\Input\Resume;
 
 /**
@@ -16,19 +17,29 @@ use NaokiTsuchiya\BEARAgUi\Input\Resume;
  */
 final class ResumeParser
 {
-    /** @param array<string, mixed> $data */
-    public static function parse(array $data): Resume|ParseError
+    /**
+     * @param array<string, mixed> $data
+     *
+     * @return Result<Resume, list<ParseError>>
+     */
+    public static function parse(array $data): Result
     {
+        $errors = [];
+
         $interruptId = Coerce::nonEmptyString($data['interruptId'] ?? null);
         if ($interruptId === null) {
-            return new ParseError('interruptId is required');
+            $errors[] = new ParseError('interruptId is required');
         }
 
         $status = Coerce::nonEmptyString($data['status'] ?? null);
         if ($status === null) {
-            return new ParseError('status is required');
+            $errors[] = new ParseError('status is required');
         }
 
-        return new Resume($interruptId, $status, $data['payload'] ?? null);
+        if ($errors !== [] || $interruptId === null || $status === null) {
+            return Result::err($errors);
+        }
+
+        return Result::ok(new Resume($interruptId, $status, $data['payload'] ?? null));
     }
 }
