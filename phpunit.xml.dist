@@ -5,8 +5,12 @@
     bootstrap="vendor/autoload.php"
 >
     <testsuites>
-        <testsuite name="NaokiTsuchiya.BEARAgUi test suite">
+        <testsuite name="unit">
             <directory>tests</directory>
+            <exclude>tests/Integration</exclude>
+        </testsuite>
+        <testsuite name="integration">
+            <directory>tests/Integration</directory>
         </testsuite>
     </testsuites>
     <coverage processUncoveredFiles="true">
