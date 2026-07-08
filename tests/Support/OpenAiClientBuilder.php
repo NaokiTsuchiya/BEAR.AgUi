@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace NaokiTsuchiya\BEARAgUi\Support\Http;
+namespace NaokiTsuchiya\BEARAgUi\Support;
 
 use OpenAI;
 use OpenAI\Client;

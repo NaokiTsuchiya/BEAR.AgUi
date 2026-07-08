@@ -11,6 +11,7 @@ use BEAR\ToolUse\Schema\Tool;
 use Generator;
 use OpenAI\Contracts\ClientContract;
 use Override;
+use RuntimeException;
 
 /**
  * Streams OpenAI chat completions as bear/tool-use StreamEvents (D19).
@@ -31,6 +32,9 @@ use Override;
  * tool_calls indexes are not supported. bear's StreamContentAccumulator keeps
  * a single current tool block anyway, and OpenAI streams tool calls
  * sequentially in practice.
+ *
+ * A stream that ends without any finish_reason chunk (truncated SSE) throws,
+ * so the run surfaces as RUN_ERROR instead of a fabricated end_turn (D23).
  */
 final readonly class OpenAiStreamingLlmClient implements StreamingLlmClientInterface
 {
@@ -64,6 +68,7 @@ final readonly class OpenAiStreamingLlmClient implements StreamingLlmClientInter
         }
 
         $open = self::OPEN_NONE;
+        $finished = false;
         foreach ($this->client->chat()->createStreamed($parameters) as $chunk) {
             $choice = $chunk->choices[0] ?? null;
             if ($choice === null) {
@@ -111,6 +116,12 @@ final readonly class OpenAiStreamingLlmClient implements StreamingLlmClientInter
             }
 
             yield new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => self::stopReason($choice->finishReason)]);
+
+            $finished = true;
+        }
+
+        if (!$finished) {
+            throw new RuntimeException('LLM stream ended without finish_reason');
         }
     }
 

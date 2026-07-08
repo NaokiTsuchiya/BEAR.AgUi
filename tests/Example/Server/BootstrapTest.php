@@ -18,9 +18,9 @@ use function putenv;
  * Totality contract of the example bootstrap (T5/D18): building the app
  * must never depend on the environment being configured. With every
  * OPENAI_* variable unset, buildRunner() still returns a fully wired
- * runner — the OpenAI client is constructed lazily on the first LLM call
- * (LazyStreamingLlmClient), so missing configuration surfaces as RUN_ERROR
- * inside a run (D11), never as a bootstrap crash before the stream opens.
+ * runner — OpenAI::factory()->make() only assembles the client and performs
+ * no I/O, so missing or wrong configuration surfaces as RUN_ERROR inside a
+ * run (D11), never as a bootstrap crash before the stream opens.
  */
 #[CoversClass(Bootstrap::class)]
 final class BootstrapTest extends TestCase

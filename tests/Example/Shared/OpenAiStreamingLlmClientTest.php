@@ -12,9 +12,10 @@ use Example\Shared\OpenAiMessageMapper;
 use Example\Shared\OpenAiStreamingLlmClient;
 use Example\Shared\OpenAiToolMapper;
 use Example\StubLlm\CannedConversation;
-use NaokiTsuchiya\BEARAgUi\Support\Http\OpenAiClientBuilder;
+use NaokiTsuchiya\BEARAgUi\Support\OpenAiClientBuilder;
 use NaokiTsuchiya\BEARAgUi\Support\StubHttpClient;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use stdClass;
 
 use function array_key_last;
@@ -218,6 +219,68 @@ final class OpenAiStreamingLlmClientTest extends TestCase
                 [StreamEvent::MESSAGE_STOP, ['stopReason' => 'end_turn']],
             ],
             $events,
+        );
+    }
+
+    public function testToolToToolBoundaryClosesFirstToolBlock(): void
+    {
+        $http = self::scriptedHttp([
+            self::chunk(['role' => 'assistant']),
+            self::chunk(['tool_calls' => [self::toolCallStart(0, 'call_1', 'get_time')]]),
+            self::chunk(['tool_calls' => [self::toolCallArguments(0, '{"timezone":"UTC"}')]]),
+            self::chunk(['tool_calls' => [self::toolCallStart(1, 'call_2', 'get_time')]]),
+            self::chunk(['tool_calls' => [self::toolCallArguments(1, '{"timezone":"JST"}')]]),
+            self::chunk([], 'tool_calls'),
+        ]);
+
+        $events = self::pairs(self::stream($http, '', [Message::user('time?')], [self::getTimeTool()]));
+
+        static::assertSame(
+            [
+                [StreamEvent::TOOL_USE_START, ['id' => 'call_1', 'name' => 'get_time']],
+                [StreamEvent::TOOL_USE_DELTA, ['input' => '{"timezone":"UTC"}']],
+                [StreamEvent::CONTENT_BLOCK_STOP, []],
+                [StreamEvent::TOOL_USE_START, ['id' => 'call_2', 'name' => 'get_time']],
+                [StreamEvent::TOOL_USE_DELTA, ['input' => '{"timezone":"JST"}']],
+                [StreamEvent::CONTENT_BLOCK_STOP, []],
+                [StreamEvent::MESSAGE_STOP, ['stopReason' => 'tool_use']],
+            ],
+            $events,
+        );
+    }
+
+    public function testStreamWithoutFinishReasonThrowsAfterYieldedDeltas(): void
+    {
+        $http = self::scriptedHttp([
+            self::chunk(['role' => 'assistant', 'content' => '']),
+            self::chunk(['content' => 'Hello']),
+            self::chunk(['content' => ' world']),
+        ]);
+        $client = new OpenAiStreamingLlmClient(
+            OpenAiClientBuilder::build($http),
+            new OpenAiMessageMapper(),
+            new OpenAiToolMapper(),
+            'stub-model',
+        );
+
+        $events = [];
+        $caught = null;
+        try {
+            foreach ($client->chatStream('', [Message::user('hi')], []) as $event) {
+                $events[] = $event;
+            }
+        } catch (RuntimeException $exception) {
+            $caught = $exception;
+        }
+
+        static::assertNotNull($caught);
+        static::assertSame('LLM stream ended without finish_reason', $caught->getMessage());
+        static::assertSame(
+            [
+                [StreamEvent::TEXT_DELTA, ['text' => 'Hello']],
+                [StreamEvent::TEXT_DELTA, ['text' => ' world']],
+            ],
+            self::pairs($events),
         );
     }
 

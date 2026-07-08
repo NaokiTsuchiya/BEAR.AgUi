@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Example\Server;
 
-use BEAR\ToolUse\Llm\StreamingLlmClientInterface;
 use Example\Server\Tool\AskConfirmationTool;
 use Example\Server\Tool\GetTimeTool;
 use Example\Shared\OpenAiMessageMapper;
@@ -33,12 +32,12 @@ use function rtrim;
  *                     deterministic demo.
  *  - OPENAI_MODEL     default gpt-4o-mini.
  *
- * The OpenAI client is built lazily on the first LLM call (see
- * {@see LazyStreamingLlmClient}), so buildRunner() performs no HTTP-client
- * discovery or I/O and connection-level LLM failures surface as RUN_ERROR
- * on the open stream (D11), never as a bootstrap crash. Per D23 the runner
- * only generates events; {@see buildResponder()} provides the SSE framing
- * half the front controller combines with a sink.
+ * OpenAI::factory()->make() only assembles the client object — it performs
+ * no I/O — so buildRunner() cannot fail on connection problems; a wrong key,
+ * URL, or unreachable endpoint surfaces during the run as RUN_ERROR on the
+ * open stream (D11). Per D23 the runner only generates events;
+ * {@see buildResponder()} provides the SSE framing half the front controller
+ * combines with a sink.
  */
 final class Bootstrap
 {
@@ -54,13 +53,11 @@ final class Bootstrap
         $baseUrl = rtrim(getenv('OPENAI_BASE_URL') ?: self::DEFAULT_BASE_URL, '/');
         $model = getenv('OPENAI_MODEL') ?: self::DEFAULT_MODEL;
 
-        $llm = new LazyStreamingLlmClient(
-            static fn(): StreamingLlmClientInterface => new OpenAiStreamingLlmClient(
-                OpenAI::factory()->withApiKey($apiKey)->withBaseUri($baseUrl)->make(),
-                new OpenAiMessageMapper(),
-                new OpenAiToolMapper(),
-                $model,
-            ),
+        $llm = new OpenAiStreamingLlmClient(
+            OpenAI::factory()->withApiKey($apiKey)->withBaseUri($baseUrl)->make(),
+            new OpenAiMessageMapper(),
+            new OpenAiToolMapper(),
+            $model,
         );
 
         $getTime = new GetTimeTool();
