@@ -18,7 +18,9 @@ use Override;
  */
 final readonly class DemoDispatcher implements DispatcherInterface
 {
-    public function __construct(private GetTimeTool $getTime = new GetTimeTool()) {}
+    public function __construct(
+        private GetTimeTool $getTime = new GetTimeTool(),
+    ) {}
 
     #[Override]
     public function dispatch(ToolCall $toolCall): ToolResult

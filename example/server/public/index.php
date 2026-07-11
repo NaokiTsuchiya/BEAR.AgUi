@@ -30,7 +30,7 @@ use NaokiTsuchiya\BEARAgUi\Sse\PhpSapiSseSink;
 require dirname(__DIR__, 3) . '/vendor/autoload.php';
 
 /** @param array<string, mixed> $payload */
-function respondJson(int $status, array $payload): void
+function respond_json(int $status, array $payload): void
 {
     http_response_code($status);
     header('Content-Type: application/json');
@@ -41,13 +41,13 @@ $method = $_SERVER['REQUEST_METHOD'] ?? '';
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
 
 if ($method === 'GET' && $path === '/ping') {
-    respondJson(200, ['status' => 'Healthy', 'time_of_last_update' => time()]);
+    respond_json(200, ['status' => 'Healthy', 'time_of_last_update' => time()]);
 
     return;
 }
 
 if ($method !== 'POST' || $path !== '/invocations') {
-    respondJson(404, [
+    respond_json(404, [
         'code' => 'NOT_FOUND',
         'message' => 'Not found. This server serves GET /ping and POST /invocations only.',
     ]);
@@ -58,7 +58,7 @@ if ($method !== 'POST' || $path !== '/invocations') {
 $contentType = (string) ($_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? '');
 $mediaType = strtolower(trim(explode(';', $contentType)[0]));
 if ($mediaType !== 'application/json') {
-    respondJson(415, [
+    respond_json(415, [
         'code' => 'UNSUPPORTED_MEDIA_TYPE',
         'message' => 'Content-Type must be application/json.',
     ]);
@@ -68,18 +68,14 @@ if ($mediaType !== 'application/json') {
 
 $result = (new RunAgentInputParser())->parse((string) file_get_contents('php://input'));
 if (!$result->isOk()) {
-    respondJson(400, [
+    respond_json(400, [
         'code' => 'VALIDATION_ERROR',
-        'errors' => array_map(
-            static fn(ParseError $error): array => ['message' => $error->message],
-            $result->unwrapErr(),
-        ),
+        'errors' => array_map(static fn(ParseError $error): array => [
+            'message' => $error->message,
+        ], $result->unwrapErr()),
     ]);
 
     return;
 }
 
-Bootstrap::buildResponder()->respond(
-    Bootstrap::buildRunner()->stream($result->unwrap()),
-    new PhpSapiSseSink(),
-);
+Bootstrap::buildResponder()->respond(Bootstrap::buildRunner()->stream($result->unwrap()), new PhpSapiSseSink());

@@ -36,9 +36,9 @@ final readonly class CannedConversation
     private const ARGUMENTS_CHUNK_1 = '{"timezone"';
     private const ARGUMENTS_CHUNK_2 = ':"UTC"}';
 
-    public function __construct(private int $created)
-    {
-    }
+    public function __construct(
+        private int $created,
+    ) {}
 
     /**
      * @param array<string, mixed> $requestBody Decoded /v1/chat/completions request.
@@ -65,7 +65,7 @@ final readonly class CannedConversation
     private function lastMessage(array $requestBody): array
     {
         $messages = $requestBody['messages'] ?? null;
-        if (! is_array($messages) || $messages === []) {
+        if (!is_array($messages) || $messages === []) {
             return [];
         }
 
@@ -95,26 +95,38 @@ final readonly class CannedConversation
             $this->chunk($model, ['role' => 'assistant'], null),
             $this->chunk($model, ['content' => 'Let me check '], null),
             $this->chunk($model, ['content' => 'the current time.'], null),
-            $this->chunk($model, [
-                'tool_calls' => [
-                    [
-                        'index' => 0,
-                        'id' => self::TOOL_CALL_ID,
-                        'type' => 'function',
-                        'function' => ['name' => self::TOOL_NAME, 'arguments' => ''],
+            $this->chunk(
+                $model,
+                [
+                    'tool_calls' => [
+                        [
+                            'index' => 0,
+                            'id' => self::TOOL_CALL_ID,
+                            'type' => 'function',
+                            'function' => ['name' => self::TOOL_NAME, 'arguments' => ''],
+                        ],
                     ],
                 ],
-            ], null),
-            $this->chunk($model, [
-                'tool_calls' => [
-                    ['index' => 0, 'function' => ['arguments' => self::ARGUMENTS_CHUNK_1]],
+                null,
+            ),
+            $this->chunk(
+                $model,
+                [
+                    'tool_calls' => [
+                        ['index' => 0, 'function' => ['arguments' => self::ARGUMENTS_CHUNK_1]],
+                    ],
                 ],
-            ], null),
-            $this->chunk($model, [
-                'tool_calls' => [
-                    ['index' => 0, 'function' => ['arguments' => self::ARGUMENTS_CHUNK_2]],
+                null,
+            ),
+            $this->chunk(
+                $model,
+                [
+                    'tool_calls' => [
+                        ['index' => 0, 'function' => ['arguments' => self::ARGUMENTS_CHUNK_2]],
+                    ],
                 ],
-            ], null),
+                null,
+            ),
             $this->chunk($model, [], 'tool_calls'),
         ];
     }

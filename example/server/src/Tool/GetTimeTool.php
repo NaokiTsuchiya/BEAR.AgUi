@@ -49,15 +49,18 @@ final readonly class GetTimeTool
      */
     public function __invoke(array $input): string
     {
-        $timezone = new DateTimeZone('UTC');
-        if (isset($input['timezone']) && is_string($input['timezone'])) {
-            try {
-                $timezone = new DateTimeZone($input['timezone']);
-            } catch (Exception) {
-                // Invalid identifier: keep the UTC default.
-            }
-        }
+        $requested = $input['timezone'] ?? null;
+        $timezone = is_string($requested) ? $this->zoneOrUtc($requested) : new DateTimeZone('UTC');
 
         return (new DateTimeImmutable('now', $timezone))->format(DateTimeInterface::ATOM);
+    }
+
+    private function zoneOrUtc(string $identifier): DateTimeZone
+    {
+        try {
+            return new DateTimeZone($identifier);
+        } catch (Exception) {
+            return new DateTimeZone('UTC');
+        }
     }
 }

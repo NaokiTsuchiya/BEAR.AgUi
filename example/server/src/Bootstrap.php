@@ -49,9 +49,9 @@ final class Bootstrap
 
     public static function buildRunner(): AgUiRunner
     {
-        $apiKey = getenv('OPENAI_API_KEY') ?: 'stub';
-        $baseUrl = rtrim(getenv('OPENAI_BASE_URL') ?: self::DEFAULT_BASE_URL, '/');
-        $model = getenv('OPENAI_MODEL') ?: self::DEFAULT_MODEL;
+        $apiKey = self::env('OPENAI_API_KEY', 'stub');
+        $baseUrl = rtrim(self::env('OPENAI_BASE_URL', self::DEFAULT_BASE_URL), '/');
+        $model = self::env('OPENAI_MODEL', self::DEFAULT_MODEL);
 
         $llm = new OpenAiStreamingLlmClient(
             OpenAI::factory()->withApiKey($apiKey)->withBaseUri($baseUrl)->make(),
@@ -78,5 +78,13 @@ final class Bootstrap
     public static function buildResponder(): SseResponder
     {
         return new SseResponder(new SseEncoder());
+    }
+
+    /** An unset OR empty variable falls back — `FOO=` in a shell must not yield ''. */
+    private static function env(string $name, string $default): string
+    {
+        $value = getenv($name);
+
+        return $value === false || $value === '' ? $default : $value;
     }
 }

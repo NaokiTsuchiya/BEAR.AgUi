@@ -22,13 +22,18 @@ $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
 if ($method !== 'POST' || $path !== '/v1/chat/completions') {
     http_response_code(404);
     header('Content-Type: application/json');
-    echo json_encode([
-        'error' => [
-            'message' => 'Not found. This stub serves POST /v1/chat/completions only.',
-            'type' => 'invalid_request_error',
-            'code' => 'not_found',
-        ],
-    ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo
+        json_encode(
+            [
+                'error' => [
+                    'message' => 'Not found. This stub serves POST /v1/chat/completions only.',
+                    'type' => 'invalid_request_error',
+                    'code' => 'not_found',
+                ],
+            ],
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+        )
+    ;
 
     return;
 }

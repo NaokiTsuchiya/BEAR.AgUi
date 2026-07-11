@@ -28,9 +28,9 @@ use const JSON_UNESCAPED_UNICODE;
  */
 final readonly class OpenAiSseWriter
 {
-    public function __construct(public int $delayMs = 0)
-    {
-    }
+    public function __construct(
+        public int $delayMs = 0,
+    ) {}
 
     /** Reads the inter-chunk delay from the STUB_DELAY_MS env var (default 0). */
     public static function fromEnv(): self

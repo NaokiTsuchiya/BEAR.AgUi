@@ -6,28 +6,30 @@ namespace Example\Shared;
 
 use BEAR\ToolUse\Runtime\Message;
 
-use function is_string;
-use function json_encode;
-
-use const JSON_THROW_ON_ERROR;
-use const JSON_UNESCAPED_SLASHES;
-use const JSON_UNESCAPED_UNICODE;
-
 /**
  * Maps bear/tool-use messages to the OpenAI chat `messages` array (D20).
  *
  * - A non-empty $system is prepended as {role: system}.
  * - bear's user role carries two payloads, told apart by content[].type:
  *   plain text blocks concatenate into one {role: user} message, while
- *   tool_result blocks expand to MULTIPLE {role: tool, tool_call_id, content}
- *   messages (OpenAI wants one tool message per call; content must be a
- *   string, so non-string results are json_encoded).
+ *   tool_result blocks expand to MULTIPLE {role: tool} messages.
  * - assistant messages emit their concatenated text (or null when there is
- *   none) plus tool_calls built from tool_use blocks, with the input
- *   re-encoded as a JSON string.
+ *   none) plus tool_calls built from tool_use blocks.
+ *
+ * Block-level payload conversion lives in {@see OpenAiContentBlockMapper};
+ * this class only walks messages and dispatches on their variant. The
+ * branches that remain ARE that dispatch — the message-variant × block-type
+ * matrix of D20 — so the defect heuristic is expected to flag it (same
+ * rationale as the library's RunAgentInputParser).
+ *
+ * @mago-expect lint:kan-defect
  */
 final readonly class OpenAiMessageMapper
 {
+    public function __construct(
+        private OpenAiContentBlockMapper $block = new OpenAiContentBlockMapper(),
+    ) {}
+
     /**
      * @param list<Message> $messages
      *
@@ -49,46 +51,37 @@ final readonly class OpenAiMessageMapper
         return $mapped;
     }
 
-    /** @return list<array<string, mixed>> */
+    /**
+     * bear's user role doubles as the tool_result carrier (D20): a message
+     * with tool_result blocks becomes those {role: tool} messages, anything
+     * else concatenates its text into one {role: user} message.
+     *
+     * @return list<array<string, mixed>>
+     */
     private function mapMessage(Message $message): array
     {
         if ($message->role === 'assistant') {
             return [$this->mapAssistant($message)];
         }
 
-        if ($this->hasToolResults($message)) {
-            return $this->mapToolResults($message);
+        $toolMessages = $this->mapToolResults($message);
+        if ($toolMessages !== []) {
+            return $toolMessages;
         }
 
         return [['role' => 'user', 'content' => $this->concatText($message)]];
-    }
-
-    /** bear's user role doubles as the tool_result carrier; content[].type tells them apart (D20). */
-    private function hasToolResults(Message $message): bool
-    {
-        foreach ($message->content as $block) {
-            if (($block['type'] ?? null) === 'tool_result') {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /** @return list<array<string, mixed>> one {role: tool} message per tool_result block */
     private function mapToolResults(Message $message): array
     {
         $toolMessages = [];
-        foreach ($message->content as $block) {
-            if (($block['type'] ?? null) !== 'tool_result') {
+        foreach ($message->content as $content) {
+            if (!$this->block->isType($content, 'tool_result')) {
                 continue;
             }
 
-            $toolMessages[] = [
-                'role' => 'tool',
-                'tool_call_id' => $block['tool_use_id'] ?? '',
-                'content' => $this->stringify($block['content'] ?? ''),
-            ];
+            $toolMessages[] = $this->block->toolResult($content);
         }
 
         return $toolMessages;
@@ -100,19 +93,12 @@ final readonly class OpenAiMessageMapper
         $text = $this->concatText($message);
 
         $toolCalls = [];
-        foreach ($message->content as $block) {
-            if (($block['type'] ?? null) !== 'tool_use') {
+        foreach ($message->content as $content) {
+            if (!$this->block->isType($content, 'tool_use')) {
                 continue;
             }
 
-            $toolCalls[] = [
-                'id' => $block['id'] ?? '',
-                'type' => 'function',
-                'function' => [
-                    'name' => $block['name'] ?? '',
-                    'arguments' => $this->encodeArguments($block['input'] ?? []),
-                ],
-            ];
+            $toolCalls[] = $this->block->toolCall($content);
         }
 
         $assistant = ['role' => 'assistant', 'content' => $text === '' ? null : $text];
@@ -126,29 +112,10 @@ final readonly class OpenAiMessageMapper
     private function concatText(Message $message): string
     {
         $text = '';
-        foreach ($message->content as $block) {
-            if (($block['type'] ?? null) === 'text' && is_string($block['text'] ?? null)) {
-                $text .= $block['text'];
-            }
+        foreach ($message->content as $content) {
+            $text .= $this->block->text($content);
         }
 
         return $text;
-    }
-
-    /** OpenAI tool message content must be a string; non-strings are json_encoded. */
-    private function stringify(mixed $content): string
-    {
-        return is_string($content) ? $content : $this->encode($content);
-    }
-
-    /** Tool-call arguments are a JSON object string; an empty input encodes as {} (not []). */
-    private function encodeArguments(mixed $input): string
-    {
-        return $input === [] ? '{}' : $this->encode($input);
-    }
-
-    private function encode(mixed $value): string
-    {
-        return json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 }

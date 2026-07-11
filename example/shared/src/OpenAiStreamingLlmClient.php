@@ -47,8 +47,7 @@ final readonly class OpenAiStreamingLlmClient implements StreamingLlmClientInter
         private OpenAiMessageMapper $messageMapper,
         private OpenAiToolMapper $toolMapper,
         private string $model,
-    ) {
-    }
+    ) {}
 
     /**
      * @param list<Message> $messages
