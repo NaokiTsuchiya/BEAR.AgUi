@@ -330,3 +330,18 @@
   - **コスト（受容）**：reason/act ループのフォーク＝`bear/tool-use` 追従ドリフト。バージョン pin と差分監視で管理。
   - **スパイク資産**：scratchpad の `spike_swoole_parallel_tools.php` / `spike_real_agent_seam.php` / `spike_parallel_agent_impl.php`。
     プロジェクト慣例（tasks-m3 T0）に従い**コミットせず破棄**。
+
+- **D30 (M4) `確定` example の CLI クライアントは本ライブラリの PHP 型に一切依存しない**。`example/cli-client/`
+  （`Example\CliClient\`）は `NaokiTsuchiya\BEARAgUi\Event\*` を import せず、[`reference/ag-ui-protocol.md`](reference/ag-ui-protocol.md)
+  のワイヤ仕様（JSON フィールド）だけを頼りに SSE を読む。理由：実世界の AG-UI クライアント（ブラウザ／別言語 SDK）は
+  当然サーバ側 PHP 型を知り得ない。ライブラリ型を再利用すると「self-describing なワイヤ契約」の実証にならず、
+  クライアント実装が本ライブラリの内部実装に暗黙結合してしまう。
+  - **会話履歴は client 側が正本**（AG-UI はサーバ側ステートレス・D15 の前提を client 視点で反転）。各 run で
+    観測した SSE イベント（`TEXT_MESSAGE_*`/`TOOL_CALL_*`）から AG-UI `messages[]` を組み立て、次 run で全件再送する。
+    M1 `MessageHistoryMapper`（messages[]→ToolUse Message、サーバ側）の**逆方向**（events→messages[]、client 側）。
+  - **SSE 読み取りはチャンク単位で即時レンダリング**（バッファしない）。curl `CURLOPT_WRITEFUNCTION` でチャンク
+    到着ごとにコールバックし `data: {json}\n\n` を切り出す。サーバ側 `SseSinkInterface` 実装群（書き込み側）の
+    対になる、読み取り側の新規コンポーネント（ライブラリではなく example 内に閉じる）。
+  - **本物の resume はスコープ外のまま**（D4 不変）。`RUN_FINISHED{outcome:interrupt}` を受けたら interrupt
+    メッセージを表示してターンを終えるのみ。再開できない旨を明示する（v1 の既知の制約を隠さない）。
+  - 接続先は `AGUI_BASE_URL` env（既定 `http://127.0.0.1:8080`）。`OPENAI_BASE_URL`（D18）と同じ流儀。
