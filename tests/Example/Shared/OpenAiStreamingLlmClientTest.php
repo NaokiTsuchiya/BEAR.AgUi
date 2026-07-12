@@ -37,6 +37,10 @@ use const JSON_THROW_ON_ERROR;
  * No CoversClass: example/ classes are outside the coverage include path.
  *
  * @mago-expect lint:too-many-methods
+ *
+ * One method per state-machine scenario / mapping branch is intentional,
+ * same convention as CannedConversationTest; merging via data providers
+ * would obscure which OpenAI wire contract is failing.
  */
 final class OpenAiStreamingLlmClientTest extends TestCase
 {
