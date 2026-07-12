@@ -51,6 +51,28 @@ final class SseFrameReaderTest extends TestCase
         static::assertSame(['data: {"type":"RUN_FINISHED"}'], $second);
     }
 
+    public function testBoundaryTerminatorSplitAcrossTwoChunks(): void
+    {
+        $reader = new SseFrameReader();
+
+        $first = $reader->feed("data: {\"type\":\"RUN_STARTED\"}\n");
+        $second = $reader->feed("\n");
+
+        static::assertSame([], $first);
+        static::assertSame(['data: {"type":"RUN_STARTED"}'], $second);
+    }
+
+    public function testBackToBackEmptyFrames(): void
+    {
+        $reader = new SseFrameReader();
+
+        $frames = $reader->feed("\n\n\n\n");
+
+        static::assertSame(['', ''], $frames);
+        static::assertNull($reader->decode($frames[0]));
+        static::assertNull($reader->decode($frames[1]));
+    }
+
     public function testDecodeIgnoresEmptyAndCommentFrames(): void
     {
         $reader = new SseFrameReader();
