@@ -10,6 +10,7 @@ use BEAR\ToolUse\Runtime\Message;
 use BEAR\ToolUse\Schema\Tool;
 use Generator;
 use OpenAI\Contracts\ClientContract;
+use OpenAI\Responses\Chat\CreateStreamedResponseToolCall;
 use Override;
 use RuntimeException;
 
@@ -76,54 +77,81 @@ final readonly class OpenAiStreamingLlmClient implements StreamingLlmClientInter
                 continue;
             }
 
-            $content = $choice->delta->content;
-            if ($content !== null && $content !== '') {
-                if ($open === self::OPEN_TOOL) {
-                    yield new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP);
-                }
-
-                yield new StreamEvent(StreamEvent::TEXT_DELTA, ['text' => $content]);
-
-                $open = self::OPEN_TEXT;
-            }
-
-            foreach ($choice->delta->toolCalls as $toolCall) {
-                if ($toolCall->id !== null && $toolCall->id !== '') {
-                    if ($open !== self::OPEN_NONE) {
-                        yield new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP);
-                    }
-
-                    yield new StreamEvent(StreamEvent::TOOL_USE_START, [
-                        'id' => $toolCall->id,
-                        'name' => (string) $toolCall->function->name,
-                    ]);
-
-                    $open = self::OPEN_TOOL;
-                }
-
-                if ($toolCall->function->arguments !== '') {
-                    yield new StreamEvent(StreamEvent::TOOL_USE_DELTA, ['input' => $toolCall->function->arguments]);
-                }
-            }
+            yield from $this->textDelta($choice->delta->content, $open);
+            yield from $this->toolCallDeltas($choice->delta->toolCalls, $open);
 
             if ($choice->finishReason === null) {
                 continue;
             }
 
-            if ($open !== self::OPEN_NONE) {
-                yield new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP);
+            yield from $this->finish($choice->finishReason, $open);
 
-                $open = self::OPEN_NONE;
-            }
-
-            yield new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => self::stopReason($choice->finishReason)]);
-
+            $open = self::OPEN_NONE;
             $finished = true;
         }
 
         if (!$finished) {
             throw new RuntimeException('LLM stream ended without finish_reason');
         }
+    }
+
+    /**
+     * Mutates `$open` in place — `yield from` on a generator's return value
+     * is not reliably narrowed by static analysis, so the open block is
+     * threaded by reference instead (never assigned null).
+     *
+     * @return Generator<int, StreamEvent, mixed, void>
+     */
+    private function textDelta(string|null $content, string &$open): Generator
+    {
+        if ($content === null || $content === '') {
+            return;
+        }
+
+        if ($open === self::OPEN_TOOL) {
+            yield new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP);
+        }
+
+        yield new StreamEvent(StreamEvent::TEXT_DELTA, ['text' => $content]);
+
+        $open = self::OPEN_TEXT;
+    }
+
+    /**
+     * @param array<int, CreateStreamedResponseToolCall> $toolCalls
+     *
+     * @return Generator<int, StreamEvent, mixed, void>
+     */
+    private function toolCallDeltas(array $toolCalls, string &$open): Generator
+    {
+        foreach ($toolCalls as $toolCall) {
+            if ($toolCall->id !== null && $toolCall->id !== '') {
+                if ($open !== self::OPEN_NONE) {
+                    yield new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP);
+                }
+
+                yield new StreamEvent(StreamEvent::TOOL_USE_START, [
+                    'id' => $toolCall->id,
+                    'name' => (string) $toolCall->function->name,
+                ]);
+
+                $open = self::OPEN_TOOL;
+            }
+
+            if ($toolCall->function->arguments !== '') {
+                yield new StreamEvent(StreamEvent::TOOL_USE_DELTA, ['input' => $toolCall->function->arguments]);
+            }
+        }
+    }
+
+    /** @return Generator<int, StreamEvent, mixed, void> */
+    private function finish(string $finishReason, string $open): Generator
+    {
+        if ($open !== self::OPEN_NONE) {
+            yield new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP);
+        }
+
+        yield new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => self::stopReason($finishReason)]);
     }
 
     /** tool_calls/function_call keep the agent loop running; everything else is terminal (D19). */
