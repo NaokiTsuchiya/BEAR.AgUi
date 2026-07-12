@@ -12,30 +12,36 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(ToolCallRegistry::class)]
 final class ToolCallRegistryTest extends TestCase
 {
-    public function testNextStartedReturnsNullWhenEmpty(): void
+    public function testTakeStartedReturnsNullWhenEmpty(): void
     {
         $registry = new ToolCallRegistry();
 
-        static::assertNull($registry->nextStarted());
+        static::assertNull($registry->takeStarted('search'));
     }
 
-    public function testStartsArePoppedInFifoOrder(): void
+    public function testStartsArePoppedPerNameInFifoOrder(): void
     {
         $registry = new ToolCallRegistry();
 
         $registry->recordStart('call-1', 'search');
         $registry->recordStart('call-2', 'fetch');
+        $registry->recordStart('call-3', 'search');
 
-        $first = $registry->nextStarted();
-        $second = $registry->nextStarted();
+        // Cross-name lookups are independent: taking 'fetch' does not
+        // consume the older 'search' start (the old global FIFO would).
+        $fetch = $registry->takeStarted('fetch');
+        $firstSearch = $registry->takeStarted('search');
+        $secondSearch = $registry->takeStarted('search');
 
-        static::assertNotNull($first);
-        static::assertNotNull($second);
-        static::assertSame('call-1', $first->id);
-        static::assertSame('search', $first->name);
-        static::assertSame('call-2', $second->id);
-        static::assertSame('fetch', $second->name);
-        static::assertNull($registry->nextStarted());
+        static::assertNotNull($fetch);
+        static::assertNotNull($firstSearch);
+        static::assertNotNull($secondSearch);
+        static::assertSame('call-2', $fetch->id);
+        static::assertSame('fetch', $fetch->name);
+        static::assertSame('call-1', $firstSearch->id);
+        static::assertSame('call-3', $secondSearch->id);
+        static::assertNull($registry->takeStarted('search'));
+        static::assertNull($registry->takeStarted('fetch'));
     }
 
     public function testAppendInputAccumulatesByIdAndIsExposedInOutcome(): void

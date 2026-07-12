@@ -93,7 +93,7 @@ final class AgentEventTranslator
         return match ($event->type) {
             AgentEvent::TEXT_DELTA => $this->emitTextDelta($event, $state, $idMinter),
             AgentEvent::TOOL_START => $this->emitToolStart($event, $state, $idMinter),
-            AgentEvent::TOOL_RESULT => $this->emitToolResult($state, $idMinter),
+            AgentEvent::TOOL_RESULT => $this->emitToolResult($event, $state, $idMinter),
             AgentEvent::CONFIRMATION_REQUIRED => $this->emitConfirmationInterrupt($event, $state, $idMinter),
             AgentEvent::ERROR => $this->emitInStreamError($event, $state),
             default => $this->closeOpenMessage($state),
@@ -113,23 +113,34 @@ final class AgentEventTranslator
         yield new TextMessageContent($id, $this->dataString($event, 'text'));
     }
 
-    /** @return Generator<int, AgUiEventInterface, mixed, void> */
+    /**
+     * Start↔result correlation is per tool name: the AgentEvent timeline
+     * only carries names, and with parallel dispatch (D29) results for
+     * different names may be recorded out of start order. Within one name
+     * the agent yields results in start order, so a per-name FIFO pairs
+     * each result with the right id.
+     *
+     * @return Generator<int, AgUiEventInterface, mixed, void>
+     */
     private function emitToolStart(AgentEvent $event, TranslationState $state, IdMinter $idMinter): Generator
     {
         yield from $this->closeOpenMessage($state);
 
-        $started = $this->registry->nextStarted();
+        $name = $this->dataString($event, 'toolName');
+        $started = $this->registry->takeStarted($name);
         $id = $started !== null ? $started->id : $idMinter->mint('tool');
-        $name = $started !== null ? $started->name : $this->dataString($event, 'toolName');
 
-        $state->awaitingResult[] = $id;
+        $state->awaitingResult[$name][] = $id;
         yield new ToolCallStart($id, $name, null);
     }
 
     /** @return Generator<int, AgUiEventInterface, mixed, void> */
-    private function emitToolResult(TranslationState $state, IdMinter $idMinter): Generator
+    private function emitToolResult(AgentEvent $event, TranslationState $state, IdMinter $idMinter): Generator
     {
-        $id = array_shift($state->awaitingResult) ?? $idMinter->mint('tool');
+        $name = $this->dataString($event, 'toolName');
+        $queue = $state->awaitingResult[$name] ?? [];
+        $id = array_shift($queue) ?? $idMinter->mint('tool');
+        $state->awaitingResult[$name] = $queue;
         $outcome = $this->registry->resultFor($id);
         $input = $outcome !== null ? $outcome->input : '';
         $content = $outcome !== null ? $outcome->content : '';

@@ -14,7 +14,7 @@ final class TranslationState
 {
     public string|null $openMessageId = null;
 
-    /** @var list<string> FIFO of tool-call ids awaiting a tool_result event. */
+    /** @var array<string, list<string>> tool name → FIFO of tool-call ids awaiting a tool_result event. */
     public array $awaitingResult = [];
 
     /** Set true once a terminal RunFinished{interrupt} or RunError was yielded. */

@@ -13,10 +13,16 @@ namespace NaokiTsuchiya\BEARAgUi\ToolUse;
 interface ToolCallView
 {
     /**
-     * Pop the next started tool call in FIFO order (the order TOOL_USE_START
-     * arrived on the LLM stream). Returns null when no more starts are queued.
+     * Pop the oldest started tool call recorded for `$toolName` (the order
+     * TOOL_USE_START arrived on the LLM stream, tracked per name). Returns
+     * null when no start is queued for that name.
+     *
+     * Keyed by name because the high-level AgentEvent timeline only carries
+     * tool names; per-name pairing keeps start↔result correlation intact
+     * when results are recorded concurrently and out of start order
+     * (D9 revised by D29).
      */
-    public function nextStarted(): StartedToolCall|null;
+    public function takeStarted(string $toolName): StartedToolCall|null;
 
     /**
      * Look up the result of a previously dispatched tool call. Returns null

@@ -22,11 +22,17 @@ use const JSON_UNESCAPED_UNICODE;
  * Per-run side-channel for tool-call data the high-level AgentEvent stream
  * drops on the floor.
  *
- * Stores (a) a FIFO of started calls indexed by arrival order on the LLM wire
- * (`TOOL_USE_START`) and (b) a by-id map of accumulated input JSON + dispatch
- * outcome. {@see ToolCallRecorder} writes; {@see ToolCallView} reads. The
- * adapter pulls from the FIFO when it sees `tool_start`, pulls by-id when it
- * sees `tool_result` (correlating with its own awaitingResult queue).
+ * Stores (a) per-name FIFOs of started calls in the order TOOL_USE_START
+ * arrived on the LLM wire and (b) by-id maps of accumulated input JSON +
+ * dispatch outcome. {@see ToolCallRecorder} writes; {@see ToolCallView}
+ * reads. The adapter pulls a start by name when it sees `tool_start`, then
+ * pulls the outcome by the id it learned there when it sees `tool_result`.
+ *
+ * Everything is keyed by tool-call id (or name → id); no global FIFO
+ * couples starts to results, so concurrent dispatches recording results
+ * out of start order cannot mispair them (D9 revised by D29). Writes stay
+ * single-assignment per id, which keeps the recorder safe under Swoole
+ * coroutine interleaving (PHP array ops are uninterruptible).
  *
  * Lifetime: one instance per run; never shared across runs.
  *
@@ -34,7 +40,7 @@ use const JSON_UNESCAPED_UNICODE;
  */
 final class ToolCallRegistry implements ToolCallRecorder, ToolCallView
 {
-    /** @var list<StartedToolCall> FIFO of started calls in wire arrival order. */
+    /** @var array<string, list<StartedToolCall>> tool name → FIFO of started calls in wire arrival order. */
     private array $started = [];
 
     /** @var array<string, string> id → accumulated input JSON fragments. */
@@ -46,7 +52,7 @@ final class ToolCallRegistry implements ToolCallRecorder, ToolCallView
     #[Override]
     public function recordStart(string $id, string $name): void
     {
-        $this->started[] = new StartedToolCall($id, $name);
+        $this->started[$name][] = new StartedToolCall($id, $name);
         $this->inputs[$id] = '';
     }
 
@@ -68,13 +74,17 @@ final class ToolCallRegistry implements ToolCallRecorder, ToolCallView
     }
 
     #[Override]
-    public function nextStarted(): StartedToolCall|null
+    public function takeStarted(string $toolName): StartedToolCall|null
     {
-        if ($this->started === []) {
+        $queue = $this->started[$toolName] ?? [];
+        $call = array_shift($queue);
+        if ($call === null) {
             return null;
         }
 
-        return array_shift($this->started);
+        $this->started[$toolName] = $queue;
+
+        return $call;
     }
 
     #[Override]
