@@ -6,24 +6,19 @@ namespace Example\StubLlm;
 
 use stdClass;
 
-use function end;
-use function is_array;
 use function is_string;
-use function json_encode;
-
-use const JSON_THROW_ON_ERROR;
-use const JSON_UNESCAPED_SLASHES;
-use const JSON_UNESCAPED_UNICODE;
 
 /**
- * Deterministic canned conversation in OpenAI chat.completion.chunk shape (D21).
+ * Deterministic canned conversations in OpenAI chat.completion.chunk shape (D21).
  *
- * Detects the turn from the LAST received message's role:
+ * Detects the turn from the LAST received message's role — role 'tool'
+ * means turn 2 (echo the received tool results in the final text, ending
+ * with finish_reason "stop"), anything else is turn 1 (text deltas plus
+ * tool calls with arguments split across chunks, ending "tool_calls").
  *
- *  - role !== 'tool' (turn 1): text deltas, then a `get_time` tool call with its
- *    arguments split across two chunks, ending with finish_reason "tool_calls".
- *  - role === 'tool' (turn 2): echoes the received tool result content (the real
- *    time string) inside the final text deltas, ending with finish_reason "stop".
+ * Which conversation is played is {@see StubScenario}'s selection rule —
+ * keyed off the newest human user message ("remind" → confirm demo,
+ * "weather"/"news" → parallel demo, default get_time).
  *
  * Pure — no I/O, no clock (the `created` timestamp is injected). The `model`
  * field mirrors the request's model for OpenAI compatibility.
@@ -31,10 +26,6 @@ use const JSON_UNESCAPED_UNICODE;
 final readonly class CannedConversation
 {
     private const CHUNK_ID = 'chatcmpl-stub-1';
-    private const TOOL_CALL_ID = 'call_demo_1';
-    private const TOOL_NAME = 'get_time';
-    private const ARGUMENTS_CHUNK_1 = '{"timezone"';
-    private const ARGUMENTS_CHUNK_2 = ':"UTC"}';
 
     public function __construct(
         private int $created,
@@ -48,99 +39,63 @@ final readonly class CannedConversation
     public function respond(array $requestBody): iterable
     {
         $model = is_string($requestBody['model'] ?? null) ? $requestBody['model'] : 'stub-model';
-        $lastMessage = $this->lastMessage($requestBody);
+        $messages = StubRequest::messages($requestBody);
+        $scenario = StubScenario::detect($messages);
 
-        if (($lastMessage['role'] ?? null) === 'tool') {
-            return $this->finalTextTurn($model, $this->toolContent($lastMessage));
+        if (StubRequest::isToolTurn($messages)) {
+            return $this->finalTextTurn($model, $scenario, StubRequest::trailingToolContent($messages));
         }
 
-        return $this->toolCallTurn($model);
-    }
-
-    /**
-     * @param array<string, mixed> $requestBody
-     *
-     * @return array<string, mixed>
-     */
-    private function lastMessage(array $requestBody): array
-    {
-        $messages = $requestBody['messages'] ?? null;
-        if (!is_array($messages) || $messages === []) {
-            return [];
-        }
-
-        $last = end($messages);
-        if (!is_array($last)) {
-            return [];
-        }
-
-        /** @var array<string, mixed> $last OpenAI wire messages are JSON objects */
-        return $last;
-    }
-
-    /**
-     * Stringifies the received tool result content (OpenAI sends it as a string).
-     *
-     * @param array<string, mixed> $toolMessage
-     */
-    private function toolContent(array $toolMessage): string
-    {
-        $content = $toolMessage['content'] ?? '';
-
-        return is_string($content)
-            ? $content
-            : json_encode($content, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return $this->toolCallTurn($model, $scenario);
     }
 
     /** @return list<array<string, mixed>> */
-    private function toolCallTurn(string $model): array
+    private function toolCallTurn(string $model, string $scenario): array
     {
-        return [
-            $this->chunk($model, ['role' => 'assistant'], null),
-            $this->chunk($model, ['content' => 'Let me check '], null),
-            $this->chunk($model, ['content' => 'the current time.'], null),
-            $this->chunk(
+        $chunks = [$this->chunk($model, ['role' => 'assistant'], null)];
+        foreach (StubScenario::LEAD_TEXT[$scenario] as $text) {
+            $chunks[] = $this->chunk($model, ['content' => $text], null);
+        }
+
+        foreach (StubScenario::TOOL_CALLS[$scenario] as $index => [$id, $name, $argumentChunks]) {
+            $chunks[] = $this->chunk(
                 $model,
                 [
                     'tool_calls' => [
                         [
-                            'index' => 0,
-                            'id' => self::TOOL_CALL_ID,
+                            'index' => $index,
+                            'id' => $id,
                             'type' => 'function',
-                            'function' => ['name' => self::TOOL_NAME, 'arguments' => ''],
+                            'function' => ['name' => $name, 'arguments' => ''],
                         ],
                     ],
                 ],
                 null,
-            ),
-            $this->chunk(
-                $model,
-                [
-                    'tool_calls' => [
-                        ['index' => 0, 'function' => ['arguments' => self::ARGUMENTS_CHUNK_1]],
+            );
+            foreach ($argumentChunks as $argumentChunk) {
+                $chunks[] = $this->chunk(
+                    $model,
+                    [
+                        'tool_calls' => [
+                            ['index' => $index, 'function' => ['arguments' => $argumentChunk]],
+                        ],
                     ],
-                ],
-                null,
-            ),
-            $this->chunk(
-                $model,
-                [
-                    'tool_calls' => [
-                        ['index' => 0, 'function' => ['arguments' => self::ARGUMENTS_CHUNK_2]],
-                    ],
-                ],
-                null,
-            ),
-            $this->chunk($model, [], 'tool_calls'),
-        ];
+                    null,
+                );
+            }
+        }
+
+        $chunks[] = $this->chunk($model, [], 'tool_calls');
+
+        return $chunks;
     }
 
     /** @return list<array<string, mixed>> */
-    private function finalTextTurn(string $model, string $toolContent): array
+    private function finalTextTurn(string $model, string $scenario, string $toolContent): array
     {
         return [
             $this->chunk($model, ['role' => 'assistant'], null),
-            $this->chunk($model, ['content' => 'The current time is '], null),
+            $this->chunk($model, ['content' => StubScenario::FINAL_PREFIX[$scenario]], null),
             $this->chunk($model, ['content' => $toolContent], null),
             $this->chunk($model, ['content' => '.'], null),
             $this->chunk($model, [], 'stop'),
