@@ -62,8 +62,9 @@ mode = "perimeter"
 # example/*/public/index.php are unnamespaced entry scripts: perimeter rules
 # match by namespace, so they can only ever hit the default deny. Their
 # boundary ("no bear/tool-use in the HTTP layer", tasks-m2 T8) stays a
-# review concern, like tests/.
-excludes = ["tests/**", "example/*/public/**"]
+# review concern, like tests/. example/cli-client/bin/agui-chat.php is the
+# same shape of unnamespaced entry script (tasks-m4 T7).
+excludes = ["tests/**", "example/*/public/**", "example/cli-client/bin/**"]
 
 [guard.perimeter]
 # AgUiRunner (root namespace) is the composition root; the more specific
@@ -242,3 +243,14 @@ permit = [
     "NaokiTsuchiya\\BEARAgUi\\Sse\\",
     "NaokiTsuchiya\\BEARAgUi\\ToolUse\\",
 ]
+
+[[guard.perimeter.rules]]
+# The CLI client (M4, D30): a plain HTTP+SSE consumer of the AG-UI wire
+# protocol. The empty permit list beyond @native/@self is the point — it
+# mechanically forbids every NaokiTsuchiya\BEARAgUi\ sub-namespace, so the
+# client can only ever be built from the wire shapes in
+# docs/reference/ag-ui-protocol.md, the same footing as a real-world
+# consumer (browser, other-language SDK) that never sees this library's
+# PHP types.
+namespace = "Example\\CliClient\\"
+permit = ["@native", "@self"]
