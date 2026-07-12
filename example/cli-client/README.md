@@ -28,6 +28,13 @@ OPENAI_BASE_URL=http://127.0.0.1:8081/v1 php example/bear/public/server.php
 
 詳細は [`example/bear/README.md`](../bear/README.md) を参照してください。
 
+上記 2 つと本 CLI の起動・3 シナリオ実行・後片付けを 1 コマンドでまとめた便利スクリプトもあります
+(`composer tests` の対象外・単なる手動 smoke のラッパー):
+
+```console
+example/cli-client/bin/smoke-test.sh
+```
+
 ## 起動(端末 3)
 
 接続先は `AGUI_BASE_URL` env で指定します(既定 `http://127.0.0.1:8080`。`OPENAI_BASE_URL` と
@@ -69,6 +76,7 @@ AGUI_BASE_URL=http://127.0.0.1:9000 php example/cli-client/bin/agui-chat.php
 
 ```
 bin/agui-chat.php      エントリポイント(REPL / 1発モード)
+bin/smoke-test.sh       手動 smoke の便利スクリプト(サーバ起動〜3 シナリオ〜後片付け)
 src/SseFrameReader.php  バイト列 → 完成した SSE フレーム → JSON デコード
 src/AgUiHttpClient.php  curl + CURLOPT_WRITEFUNCTION でストリーミング POST
 src/EventRenderer.php   デコード済みイベント → ターミナル出力
