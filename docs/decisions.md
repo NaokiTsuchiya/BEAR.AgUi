@@ -330,3 +330,39 @@
   - **コスト（受容）**：reason/act ループのフォーク＝`bear/tool-use` 追従ドリフト。バージョン pin と差分監視で管理。
   - **スパイク資産**：scratchpad の `spike_swoole_parallel_tools.php` / `spike_real_agent_seam.php` / `spike_parallel_agent_impl.php`。
     プロジェクト慣例（tasks-m3 T0）に従い**コミットせず破棄**。
+
+- **D30 (M4) `確定` example の CLI クライアントは本ライブラリの PHP 型に一切依存しない**。`example/cli-client/`
+  （`Example\CliClient\`）は `NaokiTsuchiya\BEARAgUi\Event\*` を import せず、[`reference/ag-ui-protocol.md`](reference/ag-ui-protocol.md)
+  のワイヤ仕様（JSON フィールド）だけを頼りに SSE を読む。理由：実世界の AG-UI クライアント（ブラウザ／別言語 SDK）は
+  当然サーバ側 PHP 型を知り得ない。ライブラリ型を再利用すると「self-describing なワイヤ契約」の実証にならず、
+  クライアント実装が本ライブラリの内部実装に暗黙結合してしまう。
+  - **会話履歴は client 側が正本**（AG-UI はサーバ側ステートレス・D15 の前提を client 視点で反転）。各 run で
+    観測した SSE イベント（`TEXT_MESSAGE_*`/`TOOL_CALL_*`）から AG-UI `messages[]` を組み立て、次 run で全件再送する。
+    M1 `MessageHistoryMapper`（messages[]→ToolUse Message、サーバ側）の**逆方向**（events→messages[]、client 側）。
+  - **SSE 読み取りはチャンク単位で即時レンダリング**（バッファしない）。curl `CURLOPT_WRITEFUNCTION` でチャンク
+    到着ごとにコールバックし `data: {json}\n\n` を切り出す。サーバ側 `SseSinkInterface` 実装群（書き込み側）の
+    対になる、読み取り側の新規コンポーネント（ライブラリではなく example 内に閉じる）。
+  - **本物の resume はスコープ外のまま**（D4 不変）。`RUN_FINISHED{outcome:interrupt}` を受けたら interrupt
+    メッセージを表示してターンを終えるのみ。再開できない旨を明示する（v1 の既知の制約を隠さない）。
+  - 接続先は `AGUI_BASE_URL` env（既定 `http://127.0.0.1:8080`）。`OPENAI_BASE_URL`（D18）と同じ流儀。
+
+- **D31 (M5) `確定` example の Web UI はビルドツール無しの React（CDN + Babel standalone）を、M3 の
+  bear アプリ自身が同一オリジンで配信する**。
+  - **ビルドツール無し React**：`react` / `react-dom`（UMD 版）と `@babel/standalone` を CDN スクリプトタグで
+    読み込み、`<script type="text/babel">` 内に JSX を書く（React 公式が過去に案内していた「ビルド不要」導入経路
+    と同じ手法）。Node/npm は一切不要。1 ファイル完結の静的 HTML（`example/bear/public/chat.html` 等）。
+  - **配信は同一オリジン**：静的 HTML は `public/server.php` の `onRequest` から直接返す（BEAR.Resource を経由
+    しない＝静的アセットは「ツールリソース」の関心事ではないため、既存の 404 フォールバックと同じ扱いで
+    `GET /` を追加するだけ）。これにより **CORS 対応が一切不要**（`/invocations` と同一オリジン）。CORS 自体は
+    ADR 0005（デプロイ関心事）でスコープ外のまま——別オリジン配信は本 M5 では選ばない。
+  - **SSE は `fetch()` + `ReadableStream` で自前パース**（`EventSource` は使わない）：AG-UI は `POST` + JSON
+    body が必須で、ブラウザ標準の `EventSource` は `GET` しか送れないため使えない。`response.body.getReader()`
+    → `TextDecoder` → `\n\n` 区切りでフレーム分割 → `JSON.parse()`、という M4 の `SseFrameReader`（PHP 版）と
+    同型のロジックを JS で再実装する（プラットフォームが異なるため共有コードにはしない）。
+  - **本ライブラリの型に依存しない**（D30 と同じ精神。ブラウザ JS はそもそも PHP 型を知り得ないため自明だが、
+    ワイヤ仕様（[`reference/ag-ui-protocol.md`](reference/ag-ui-protocol.md)）のみを頼りにする点を明記する）。
+  - **会話履歴はブラウザ側が正本**（D30 と同じ・client 側で `messages[]` を組み立てて次 run に全件再送）。
+  - **JS の自動テストは無し**：本リポジトリは PHP 専用のテストツールチェーン（phpunit/mago/phpmd）で、
+    Node 環境を前提にしない（D30 の「ビルドツール無し」と整合）。検証は**手動ブラウザ smoke**（M4 の
+    手動 smoke チェックリストと同じ 3 シナリオ：複数ターン・並列 run・interrupt run）に一本化する。
+  - **本物の resume は引き続きスコープ外**（D4 不変）。
