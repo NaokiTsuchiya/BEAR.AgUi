@@ -50,7 +50,7 @@ final readonly class GetTimeTool
     public function __invoke(array $input): string
     {
         $requested = $input['timezone'] ?? null;
-        $timezone = is_string($requested) ? $this->zoneOrUtc($requested) : new DateTimeZone('UTC');
+        $timezone = is_string($requested) ? $this->zoneOrUtc($requested) : self::utc();
 
         return (new DateTimeImmutable('now', $timezone))->format(DateTimeInterface::ATOM);
     }
@@ -60,7 +60,18 @@ final readonly class GetTimeTool
         try {
             return new DateTimeZone($identifier);
         } catch (Exception) {
-            return new DateTimeZone('UTC');
+            return self::utc();
         }
+    }
+
+    /**
+     * 'UTC' is a valid identifier by definition — the ctor's documented
+     * throw cannot occur here.
+     *
+     * @mago-expect analysis:unhandled-thrown-type
+     */
+    private static function utc(): DateTimeZone
+    {
+        return new DateTimeZone('UTC');
     }
 }

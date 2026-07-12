@@ -70,8 +70,12 @@ final readonly class CannedConversation
         }
 
         $last = end($messages);
+        if (!is_array($last)) {
+            return [];
+        }
 
-        return is_array($last) ? $last : [];
+        /** @var array<string, mixed> $last OpenAI wire messages are JSON objects */
+        return $last;
     }
 
     /**

@@ -54,6 +54,8 @@ final readonly class OpenAiStreamingLlmClient implements StreamingLlmClientInter
      * @param list<Tool>    $tools
      *
      * @return Generator<int, StreamEvent, mixed, void>
+     *
+     * @throws RuntimeException When the SSE stream ends without a finish_reason chunk (truncation, D23).
      */
     #[Override]
     public function chatStream(string $system, array $messages, array $tools): Generator
