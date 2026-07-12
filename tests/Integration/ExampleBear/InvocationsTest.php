@@ -8,6 +8,7 @@ use BEAR\Resource\ResourceInterface;
 use BEAR\ToolUse\Llm\StreamEvent;
 use BEAR\ToolUse\Schema\Tool;
 use NaokiTsuchiya\BEARAgUi\Event\AgUiEventInterface;
+use NaokiTsuchiya\BEARAgUi\Event\RunError;
 use NaokiTsuchiya\BEARAgUi\Event\RunFinished;
 use NaokiTsuchiya\BEARAgUi\Event\RunStarted;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallResult;
@@ -35,6 +36,11 @@ use const JSON_THROW_ON_ERROR;
  * executes the real #[Tool] resources (resource-as-tool), the ALPS policy
  * governs exposure, and the parallel agent fans plain calls out on Swoole
  * coroutines.
+ *
+ * @mago-expect lint:too-many-methods
+ *
+ * One method per AG-UI scenario (parallel / interrupt / governance /
+ * error dichotomy), same convention as AgUiRunnerTest.
  */
 #[CoversNothing]
 final class InvocationsTest extends TestCase
@@ -141,6 +147,21 @@ final class InvocationsTest extends TestCase
         $results = $this->ofType($events, ToolCallResult::class);
         static::assertCount(1, $results);
         static::assertSame('call-m', $results[0]->toolCallId);
+    }
+
+    public function testMidRunFailureSurfacesAsRunErrorOnTheOpenStream(): void
+    {
+        // No scripted turns: the LLM boundary throws once the host starts
+        // draining — after RUN_STARTED already went out on the open 200
+        // stream, so the failure must be a RUN_ERROR frame (D11), never
+        // an exception or a status change.
+        $events = $this->drainRun(new FakeStreamingLlmClient(), 'hello');
+
+        static::assertInstanceOf(RunStarted::class, $events[0]);
+        $last = $events[count($events) - 1];
+        static::assertInstanceOf(RunError::class, $last);
+        static::assertSame('AGENT_ERROR', $last->code);
+        static::assertSame('Internal agent error.', $last->message);
     }
 
     public function testBrokenJsonYieldsValidationErrorArrayBody(): void
