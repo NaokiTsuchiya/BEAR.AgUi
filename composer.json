@@ -34,6 +34,7 @@
     "autoload-dev": {
         "psr-4": {
             "NaokiTsuchiya\\BEARAgUi\\": "tests/",
+            "Example\\Bear\\": "example/bear/src/",
             "Example\\Server\\": "example/server/src/",
             "Example\\Shared\\": "example/shared/src/",
             "Example\\StubLlm\\": "example/stub-llm/src/"

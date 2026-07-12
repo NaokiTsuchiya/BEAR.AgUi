@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<alps version="1.0">
+    <title>BEAR.AgUi showcase — tool governance profile</title>
+    <doc>Semantic descriptors for the demo tools. The descriptor type drives the
+        AlpsToolPolicyInputProcessor::safeAndIdempotent policy: safe and idempotent
+        tools are exposed to the LLM, unsafe ones are stripped from every request.</doc>
+
+    <!-- input parameter semantics (AlpsContextInputProcessor / SchemaConverter fallback) -->
+    <descriptor id="city" title="City name to look up"/>
+    <descriptor id="topic" title="Topic keyword to search headlines for"/>
+    <descriptor id="to" title="Recipient address"/>
+    <descriptor id="body" title="Message body text"/>
+    <descriptor id="id" title="Reminder identifier (upsert key)"/>
+    <descriptor id="text" title="Reminder text"/>
+
+    <!-- tool transitions: descriptor id == tool name -->
+    <descriptor id="weather_get" type="safe" title="Read-only weather lookup"/>
+    <descriptor id="news_get" type="safe" title="Read-only news headline lookup"/>
+    <descriptor id="message_post" type="unsafe" title="Sends a message on behalf of the user"/>
+    <descriptor id="reminder_put" type="idempotent" title="Creates or replaces a reminder"/>
+</alps>
