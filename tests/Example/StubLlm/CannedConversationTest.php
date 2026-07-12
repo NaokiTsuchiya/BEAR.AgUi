@@ -25,6 +25,11 @@ use function iterator_to_array;
  * Pure unit tests for the stub's canned OpenAI conversation (D21). No CoversClass:
  * example/ classes are outside the coverage include path (like the vendor-facing
  * contract tests in tests/Integration).
+ *
+ * @mago-expect lint:too-many-methods
+ *
+ * One method per scenario/turn contract plus focused chunk-shape helpers;
+ * merging them would obscure which OpenAI wire contract is failing.
  */
 final class CannedConversationTest extends TestCase
 {
@@ -84,6 +89,38 @@ final class CannedConversationTest extends TestCase
             ],
         ]);
 
+        self::assertFinishedWith('tool_calls', $chunks);
+    }
+
+    public function testWeatherKeywordPlaysParallelToolScenario(): void
+    {
+        // The ALPS context message the M3 app appends lists every tool name;
+        // scenario detection must skip it and read the human trigger.
+        $chunks = self::respond([
+            'model' => 'gpt-test',
+            'messages' => [
+                ['role' => 'user', 'content' => 'Weather in Tokyo and the news, please.'],
+                ['role' => 'user', 'content' => "Application semantics from ALPS:\n- reminder_put [idempotent]: x"],
+            ],
+        ]);
+
+        $starts = self::toolCallStarts($chunks);
+        static::assertCount(2, $starts);
+        static::assertSame('weather_get', $starts[0]['function']['name']);
+        static::assertSame('news_get', $starts[1]['function']['name']);
+        self::assertFinishedWith('tool_calls', $chunks);
+    }
+
+    public function testRemindKeywordPlaysConfirmableReminderScenario(): void
+    {
+        $chunks = self::respond([
+            'model' => 'gpt-test',
+            'messages' => [['role' => 'user', 'content' => 'Remind me to buy milk.']],
+        ]);
+
+        $starts = self::toolCallStarts($chunks);
+        static::assertCount(1, $starts);
+        static::assertSame('reminder_put', $starts[0]['function']['name']);
         self::assertFinishedWith('tool_calls', $chunks);
     }
 

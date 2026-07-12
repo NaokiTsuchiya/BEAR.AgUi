@@ -74,10 +74,12 @@ layers.sse = ["NaokiTsuchiya\\BEARAgUi\\Sse\\"]
 layers.input = ["NaokiTsuchiya\\BEARAgUi\\Input\\"]
 layers.tooluse = ["NaokiTsuchiya\\BEARAgUi\\ToolUse\\"]
 layers.adapter = ["NaokiTsuchiya\\BEARAgUi\\Adapter\\"]
+layers.runtime = ["NaokiTsuchiya\\BEARAgUi\\Runtime\\"]
 layers.bear-tool-use = ["BEAR\\ToolUse\\"]
 layers.example-shared = ["Example\\Shared\\"]
 layers.example-server = ["Example\\Server\\"]
 layers.example-stub = ["Example\\StubLlm\\"]
+layers.example-bear = ["Example\\Bear\\"]
 
 [[guard.perimeter.rules]]
 # Event/ is a pure AG-UI serialization layer: no internal cross-layer deps,
@@ -87,8 +89,26 @@ permit = ["@native", "@self"]
 
 [[guard.perimeter.rules]]
 # Sse/ frames Event/ instances; it cannot reach BEAR\ToolUse either.
+# Swoole\Http\Response is the one runtime handle SwooleSseSink (the S4
+# swap point for Swoole hosts, D29) writes to; ext-swoole stays in
+# require-dev + suggest.
 namespace = "NaokiTsuchiya\\BEARAgUi\\Sse\\"
-permit = ["@native", "@self", "NaokiTsuchiya\\BEARAgUi\\Event\\"]
+permit = ["@native", "@self", "NaokiTsuchiya\\BEARAgUi\\Event\\", "Swoole\\Http\\Response"]
+
+[[guard.perimeter.rules]]
+# Runtime/ is the Swoole-parallel agent loop (D29): it re-implements the
+# reason/act loop from bear/tool-use building blocks, wires the ToolUse/
+# recording shim per run, and fans plain tool calls out on Swoole
+# coroutines. Swoole access is limited to the coroutine primitives.
+namespace = "NaokiTsuchiya\\BEARAgUi\\Runtime\\"
+permit = [
+    "@native",
+    "@self",
+    "BEAR\\ToolUse\\",
+    "NaokiTsuchiya\\BEARAgUi\\ToolUse\\",
+    "Swoole\\Coroutine",
+    "Swoole\\Coroutine\\WaitGroup",
+]
 
 [[guard.perimeter.rules]]
 # Input/ is host-facing input boundary; pure AG-UI, no ToolUse.
@@ -191,6 +211,34 @@ permit = [
     "Psr\\Log\\",
     "NaokiTsuchiya\\BEARAgUi\\AgUiRunner",
     "NaokiTsuchiya\\BEARAgUi\\Adapter\\",
+    "NaokiTsuchiya\\BEARAgUi\\Sse\\",
+    "NaokiTsuchiya\\BEARAgUi\\ToolUse\\",
+]
+
+[[guard.perimeter.rules]]
+# The BEAR showcase app (M3, D25-D29): BEAR.Resource + Ray.Di +
+# bear/tool-use + the shared OpenAI layer + the library facade, plus the
+# Swoole response handle its per-request responder carries. Library access
+# is opened per symbol / sub-namespace on purpose — the root prefix would
+# also admit the test namespaces (Fake\, Support\), which example/ must
+# never touch (tasks-m2 T8, tasks-m3 T11).
+namespace = "Example\\Bear\\"
+permit = [
+    "@native",
+    "@self",
+    "Example\\Shared\\",
+    "BEAR\\Resource\\",
+    "BEAR\\ToolUse\\",
+    "OpenAI",
+    "OpenAI\\",
+    "Psr\\Log\\",
+    "Ray\\Di\\",
+    "Swoole\\Http\\Response",
+    "NaokiTsuchiya\\BEARAgUi\\AgUiRunner",
+    "NaokiTsuchiya\\BEARAgUi\\Adapter\\",
+    "NaokiTsuchiya\\BEARAgUi\\Event\\",
+    "NaokiTsuchiya\\BEARAgUi\\Input\\",
+    "NaokiTsuchiya\\BEARAgUi\\Runtime\\",
     "NaokiTsuchiya\\BEARAgUi\\Sse\\",
     "NaokiTsuchiya\\BEARAgUi\\ToolUse\\",
 ]

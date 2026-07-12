@@ -303,7 +303,7 @@
   env のみ（D18）。
 
 - **D29 (M3) `確定` 複数ツールの非同期並列実行を Swoole で自前実装（上流を待たない）**。詳細タスクは
-  [`tasks-parallel-tools.md`](tasks-parallel-tools.md)。先行スパイク **S-c** で技術検証済み（結論を以下に反映）。
+  [`tasks-parallel-tools.md`](done/tasks-parallel-tools.md)。先行スパイク **S-c** で技術検証済み（結論を以下に反映）。
   - **決定 = 並列ループをこのリポジトリで実装**。`bear/tool-use` への `dispatchBatch` seam 追加（上流PR）は待てないため、
     `OptionAwareStreamingAgentInterface` を実装する自前 **`ParallelStreamingAgent`** を **`src/Runtime/`**（ライブラリ第一級機能）に置く。
   - **なぜ自前ループが必須か（S-c で実証）**：seam は `DispatcherInterface` ではなく**ループ内**にある。コルーチン対応 Dispatcher を
@@ -326,7 +326,7 @@
     - **(b) BEAR.Resource のコルーチン安全性**：`Swoole\Runtime::enableCoroutine()` のフック範囲、DI シングルトン/共有可変状態の
       レース。**先行スパイク S-d で基本成立を確認**（`Swoole\Http\Server` → `ResourceInterface` を per-request coroutine + `WaitGroup` で
       並列 dispatch し wall-clock 201ms＝overlap・同一 worker でクラッシュ無し・SSE 逐次配信 OK）。⚠️ 検証は単純リソース2本＝**複雑な DI
-      シングルトンのレースは本番リソースで再確認**（残課題・[`tasks-parallel-tools.md`](tasks-parallel-tools.md) T5 B / tasks-m3 T0'）。
+      シングルトンのレースは本番リソースで再確認**（残課題・[`tasks-parallel-tools.md`](done/tasks-parallel-tools.md) T5 B / tasks-m3 T0'）。
   - **コスト（受容）**：reason/act ループのフォーク＝`bear/tool-use` 追従ドリフト。バージョン pin と差分監視で管理。
   - **スパイク資産**：scratchpad の `spike_swoole_parallel_tools.php` / `spike_real_agent_seam.php` / `spike_parallel_agent_impl.php`。
     プロジェクト慣例（tasks-m3 T0）に従い**コミットせず破棄**。

@@ -46,7 +46,7 @@ final class RecordingStreamingLlmClientTest extends TestCase
             $observed,
         );
 
-        $started = $registry->nextStarted();
+        $started = $registry->takeStarted('search');
         static::assertNotNull($started);
         static::assertSame('call-1', $started->id);
         static::assertSame('search', $started->name);
@@ -78,8 +78,8 @@ final class RecordingStreamingLlmClientTest extends TestCase
         // (recordStart / appendInput) actually run against the registry.
         iterator_to_array($client->chatStream('sys', [], []), false);
 
-        $first = $registry->nextStarted();
-        $second = $registry->nextStarted();
+        $first = $registry->takeStarted('a');
+        $second = $registry->takeStarted('b');
         static::assertNotNull($first);
         static::assertNotNull($second);
         static::assertSame('call-1', $first->id);
