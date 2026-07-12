@@ -155,6 +155,10 @@
     （`OPENAI_API_KEY` / `OPENAI_BASE_URL` 既定 `https://api.openai.com/v1` / `OPENAI_MODEL` 既定 `gpt-4o-mini`）。
   - 不採用：Symfony AI Platform（experimental・BC 保証なし・依存大）。M3 で多プロバイダ抽象の例として再検討可。
     orhanerday/open-ai（streaming + tool_calls 未対応）。
+  - **実装補記（M2 実装時）**：openai-php は HTTP トランスポート非同梱（PSR-18 discovery）のため
+    **`guzzlehttp/guzzle` も `require-dev` に追加**（無いと実 HTTP 経路が run 内 `RUN_ERROR` になる）。streaming の
+    自動対応（stream handler 内蔵）は Guzzle / Symfony クライアントのみで、他の PSR-18 実装は `withStreamHandler()`
+    の明示配線が要る（テスト fake は `tests/Support/OpenAiClientBuilder` がこれを担う）。
 
 - **D19 (M2) `確定` OpenAI delta → bear `StreamEvent` は state machine 変換**。
   - open block（`none`/`text`/`tool(index)`）を追跡し、境界で `CONTENT_BLOCK_STOP` を差し込む。`delta.content`→`TEXT_DELTA`、
@@ -165,6 +169,9 @@
     terminal complete に落とす（コード確認済み）。
   - ⚠️ 並行ツールは**順次のみ**対応（index 跨ぎ arguments interleave は非対応）。bear `StreamContentAccumulator` 自体が
     単数 `currentToolId`＝同じ制約。OpenAI は実際には順次送出するため実用上問題なし。README に明記。
+  - **実装補記（M2 実装時・truncation ガード）**：`finish_reason` チャンク無しで SSE が終端（切断）した場合は
+    throw → `RUN_ERROR`。bear の accumulator は stopReason 既定 `end_turn` のため、ガード無しだと途中切断が
+    `RUN_FINISHED{success}` に化ける（D23 の二分法違反）。OpenAI 契約の知識なのでこの変換層が担う。
 
 - **D20 (M2) `確定` bear `Message` → OpenAI request 変換**。
   - `$system` 非空→先頭 `{role:system}`。`user`+text→`{role:user, content}`。`assistant`→`{role:assistant, content,

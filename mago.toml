@@ -6,7 +6,7 @@ php-version = "8.2.0"
 
 [source]
 workspace = "."
-paths = ["src/", "tests"]
+paths = ["src/", "tests", "example/"]
 includes = ["vendor"]
 excludes = []
 
@@ -59,7 +59,11 @@ unchecked-exception-classes = []
 # bear/tool-use; only the ToolUse/ and Adapter/ layers may bind to it.
 [guard]
 mode = "perimeter"
-excludes = ["tests/**"]
+# example/*/public/index.php are unnamespaced entry scripts: perimeter rules
+# match by namespace, so they can only ever hit the default deny. Their
+# boundary ("no bear/tool-use in the HTTP layer", tasks-m2 T8) stays a
+# review concern, like tests/.
+excludes = ["tests/**", "example/*/public/**"]
 
 [guard.perimeter]
 # AgUiRunner (root namespace) is the composition root; the more specific
@@ -71,6 +75,9 @@ layers.input = ["NaokiTsuchiya\\BEARAgUi\\Input\\"]
 layers.tooluse = ["NaokiTsuchiya\\BEARAgUi\\ToolUse\\"]
 layers.adapter = ["NaokiTsuchiya\\BEARAgUi\\Adapter\\"]
 layers.bear-tool-use = ["BEAR\\ToolUse\\"]
+layers.example-shared = ["Example\\Shared\\"]
+layers.example-server = ["Example\\Server\\"]
+layers.example-stub = ["Example\\StubLlm\\"]
 
 [[guard.perimeter.rules]]
 # Event/ is a pure AG-UI serialization layer: no internal cross-layer deps,
@@ -119,7 +126,8 @@ permit = [
 # stream (architecture §1). It reaches Input / ToolUse / Adapter plus
 # BEAR\ToolUse (AgentOptions), and names Event/ in its return type. It does
 # NOT render — the host wires the Sse layer — so the facade touches neither
-# Sse\ nor Psr\Log.
+# Sse\ nor Psr\Log. Example\ is deliberately absent from every library
+# permit list above: src/ must never reference example/ (tasks-m2 T8).
 namespace = "NaokiTsuchiya\\BEARAgUi\\"
 permit = [
     "@native",
@@ -129,4 +137,60 @@ permit = [
     "NaokiTsuchiya\\BEARAgUi\\Adapter\\",
     "NaokiTsuchiya\\BEARAgUi\\ToolUse\\",
     "NaokiTsuchiya\\BEARAgUi\\Event\\",
+]
+
+# --- example/ boundaries (tasks-m2 T8) ---------------------------------
+# The library never references Example\ (enforced by the whitelists above),
+# and example code never reaches into tests/: the test namespaces (Fake\,
+# Support\, ...) live under NaokiTsuchiya\BEARAgUi\, which the example rules
+# below only open class-by-class / sub-namespace-by-sub-namespace.
+# example/*/public/index.php scripts are unnamespaced and thus outside
+# perimeter matching — the "no bear/tool-use in the HTTP layer" rule stays
+# a review concern.
+
+[[guard.perimeter.rules]]
+# The stub LLM is plain PHP: no library, no vendor, nothing.
+namespace = "Example\\StubLlm\\"
+permit = ["@native", "@self"]
+
+[[guard.perimeter.rules]]
+# The OpenAI conversion layer (D28, shared by M2/M3) binds bear/tool-use
+# types to openai-php — and nothing else. No BEAR.Sunday, no library code,
+# no Example\Server / Example\StubLlm.
+namespace = "Example\\Shared\\"
+permit = [
+    "@native",
+    "@self",
+    "BEAR\\ToolUse\\",
+    "OpenAI\\",
+]
+
+[[guard.perimeter.rules]]
+# Demo tools only declare bear/tool-use schema; they see no LLM, no library.
+namespace = "Example\\Server\\Tool\\"
+permit = [
+    "@native",
+    "@self",
+    "BEAR\\ToolUse\\Schema\\",
+]
+
+[[guard.perimeter.rules]]
+# The example host wires the shared OpenAI layer + demo tools into the
+# library facade. Library access is opened per symbol/sub-namespace on
+# purpose: the root prefix would also admit the test namespaces (Fake\,
+# Support\), which example/ must never touch (tasks-m2 T8).
+namespace = "Example\\Server\\"
+permit = [
+    "@native",
+    "@self",
+    "Example\\Shared\\",
+    "BEAR\\ToolUse\\Dispatch\\",
+    "BEAR\\ToolUse\\Schema\\",
+    "OpenAI",
+    "OpenAI\\",
+    "Psr\\Log\\",
+    "NaokiTsuchiya\\BEARAgUi\\AgUiRunner",
+    "NaokiTsuchiya\\BEARAgUi\\Adapter\\",
+    "NaokiTsuchiya\\BEARAgUi\\Sse\\",
+    "NaokiTsuchiya\\BEARAgUi\\ToolUse\\",
 ]

@@ -68,7 +68,8 @@ poc の実証済み層を本体 `src/`・`tests/` へ移植し、実 `bear/tool-
 
 ## M2 — example①：素 PHP HTTP サーバ + 結合テスト（ADR 0005）
 
-> **詳細タスク**: [`tasks-m2.md`](tasks-m2.md)（ファイル/クラス/メソッド粒度、着手順）
+> **詳細タスク**: [`done/tasks-m2.md`](done/tasks-m2.md)（完了済み）。配置は D28（OpenAI 変換層は
+> `example/shared/`）、入力検証の 400 エンベロープは D24（全 ParseError 集約）を正とする
 
 `poc/server.php` を発展させた**フレームワーク非依存の最小サーバ**を `example/server/` に置き、`AgUiRunner` の
 使用例とする。あわせて OpenAI 互換**スタブサーバ**を `example/stub-llm/` に同梱し、API キー無しで end-to-end を回す。
