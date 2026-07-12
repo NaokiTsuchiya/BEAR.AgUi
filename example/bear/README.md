@@ -92,10 +92,33 @@ curl -N -X POST http://127.0.0.1:8080/invocations \
 
 `GET /ping` は標準 JSON(SSE 非対象)、パース失敗は 400 JSON(全 ParseError 集約・D24)です。
 
+## チャット UI(ブラウザ・M5)
+
+上記 2 プロセス(スタブ LLM + 本アプリ)を起動したら、ブラウザで
+<http://127.0.0.1:8080/> を開くだけでチャット UI が使えます([`public/chat.html`](public/chat.html))。
+デモ入力は curl の 2 シナリオと同じです("Weather in Tokyo and the news, please." が並列 run、
+"Remind me to buy milk." が interrupt run)。
+
+- **ビルド不要** — react / react-dom(UMD)と @babel/standalone を CDN スクリプトタグで読み、
+  JSX を `<script type="text/babel">` に直書きした 1 ファイル完結の静的ページです(D31)。
+  Node/npm・ビルドパイプラインは一切使いません
+- **同一オリジン配信** — `server.php` の `GET /` が `chat.html` をそのまま返すため、
+  `/invocations` への `fetch()` に CORS 対応は不要です(毎リクエスト読み直すので
+  HTML を編集したらリロードだけで反映されます)
+- **SSE は `fetch()` + `ReadableStream` の自前パース** — AG-UI は POST + JSON body 必須のため
+  `EventSource` は使えません。M4 CLI クライアントの `SseFrameReader` / `ConversationLog`(PHP)と
+  同型のロジックを JS で再実装しています(プラットフォームが違うためコードは共有しません)
+- **会話履歴はブラウザが正本** — サーバはステートレス(D15)。観測した SSE イベントから
+  AG-UI `messages[]` を組み立て、毎 run 全件を再送します(devtools のネットワークタブで
+  2 ターン目以降のリクエスト body に全履歴が載っているのが確認できます)
+- **resume 非対応** — interrupt run は interrupt メッセージを表示してターンを終えるだけで、
+  再開はできません(v1 の既知の制約・D4)
+
 ## 構造(どこを読むか)
 
 ```
 public/server.php               Swoole\Http\Server → ResourceInterface(worker で Injector を 1 回構築)
+public/chat.html                ビルド不要 React チャット UI(M5・D31。GET / が配信)
 src/Module/AppModule.php        ResourceModule + ToolUseModule + AgUiModule + env LLM
 src/Module/AgUiModule.php       ALPS 辞書 / processors / AgUiRunner / SSE 部品の束縛
 src/Provider/AgentFactoryProvider.php  起動時 1 回 collect → ParallelStreamingAgentFactory
