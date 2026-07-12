@@ -30,6 +30,9 @@ final class FakeStreamingLlmClient implements StreamingLlmClientInterface
 
     public int $callCount = 0;
 
+    /** @var list<array{system: string, messages: list<Message>, tools: list<Tool>}> One entry per chatStream() call. */
+    public array $requests = [];
+
     /** @param list<StreamEvent> $events */
     public function queueScript(array $events): void
     {
@@ -51,6 +54,7 @@ final class FakeStreamingLlmClient implements StreamingLlmClientInterface
 
         $script = array_shift($this->scripts);
         $this->callCount++;
+        $this->requests[] = ['system' => $system, 'messages' => $messages, 'tools' => $tools];
 
         foreach ($script as $event) {
             yield $event;
