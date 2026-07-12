@@ -216,7 +216,7 @@ final class InvocationsTest extends TestCase
 
         $ro = $resource->post('page://self/invocations', ['rawBody' => $body]);
         static::assertSame(200, $ro->code);
-        assert(is_iterable($ro->body));
+        assert(is_iterable($ro->body), 'Resource response body must be iterable to drain SSE events.');
 
         $events = [];
         foreach ($ro->body as $event) {
@@ -238,9 +238,11 @@ final class InvocationsTest extends TestCase
     {
         $matched = [];
         foreach ($events as $event) {
-            if ($event instanceof $class) {
-                $matched[] = $event;
+            if (!$event instanceof $class) {
+                continue;
             }
+
+            $matched[] = $event;
         }
 
         return $matched;

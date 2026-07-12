@@ -19,6 +19,7 @@ null-type-hint = "NullPipeLast"
 
 [linter]
 integrations = ["phpunit"]
+minimum-fail-level = "note"
 
 [linter.rules]
 ambiguous-function-call = { enabled = false }

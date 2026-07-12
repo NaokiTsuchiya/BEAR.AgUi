@@ -37,8 +37,11 @@ use Swoole\Runtime;
 
 require dirname(__DIR__, 3) . '/vendor/autoload.php';
 
-$host = (string) (getenv('AGUI_HOST') ?: '127.0.0.1');
-$port = (int) (getenv('AGUI_PORT') ?: 8080);
+$hostEnv = getenv('AGUI_HOST');
+$host = (string) ($hostEnv !== false && $hostEnv !== '' ? $hostEnv : '127.0.0.1');
+
+$portEnv = getenv('AGUI_PORT');
+$port = (int) ($portEnv !== false && $portEnv !== '' ? $portEnv : 8080);
 
 Runtime::enableCoroutine();
 

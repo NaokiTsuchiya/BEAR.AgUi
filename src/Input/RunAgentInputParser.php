@@ -41,7 +41,6 @@ use const JSON_THROW_ON_ERROR;
  * the trigger split (which needs a cleanly parsed message list).
  *
  * @mago-expect lint:cyclomatic-complexity
- * @mago-expect lint:kan-defect
  *
  * The class CC / defect score is the price of the no-throw aggregation
  * pipeline (decode → collect required + map each list → split trigger),
@@ -131,10 +130,12 @@ final class RunAgentInputParser
         $userMessage = null;
         $historyEnd = 0;
         foreach ($messages as $index => $message) {
-            if ($message instanceof UserMessage) {
-                $userMessage = $message->text;
-                $historyEnd = $index;
+            if (!$message instanceof UserMessage) {
+                continue;
             }
+
+            $userMessage = $message->text;
+            $historyEnd = $index;
         }
 
         if ($userMessage === null || $userMessage === '') {
