@@ -156,12 +156,46 @@ final class ConversationLog
     /** @param array<string, mixed> $event */
     private function appendToolResult(array $event): void
     {
+        $toolCallId = self::stringOrEmpty($event['toolCallId'] ?? null);
+        $this->closeToolCallArguments($toolCallId);
+
         $this->messages[] = [
             'id' => self::stringOrNewId($event['messageId'] ?? null),
             'role' => 'tool',
             'content' => self::stringOrEmpty($event['content'] ?? null),
-            'toolCallId' => self::stringOrEmpty($event['toolCallId'] ?? null),
+            'toolCallId' => $toolCallId,
         ];
+    }
+
+    /**
+     * A tool call with no TOOL_CALL_ARGS deltas (e.g. a no-argument tool, or
+     * one rejected before its args streamed) would otherwise resend an
+     * empty `arguments` string — not valid JSON, and the server rejects it
+     * (`function.arguments` must decode to a JSON object).
+     */
+    private function closeToolCallArguments(string $toolCallId): void
+    {
+        if ($this->openAssistantIndex < 0) {
+            return;
+        }
+
+        /** @var list<array<string, mixed>> $toolCalls */
+        $toolCalls = $this->messages[$this->openAssistantIndex]['toolCalls'] ?? [];
+        foreach ($toolCalls as $index => $toolCall) {
+            if ($toolCall['id'] !== $toolCallId) {
+                continue;
+            }
+
+            /** @var array<string, mixed> $function */
+            $function = $toolCall['function'];
+            if (self::stringOrEmpty($function['arguments'] ?? null) === '') {
+                $function['arguments'] = '{}';
+                $toolCall['function'] = $function;
+                $toolCalls[$index] = $toolCall;
+            }
+        }
+
+        $this->messages[$this->openAssistantIndex]['toolCalls'] = $toolCalls;
     }
 
     private function closeOpenAssistantMessage(): void

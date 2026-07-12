@@ -141,6 +141,25 @@ final class ConversationLogTest extends TestCase
         static::assertSame(['id' => 'm-2', 'role' => 'assistant', 'content' => 'Great'], $secondTurnMessages[3]);
     }
 
+    public function testToolCallWithNoArgsDeltaDefaultsToEmptyJsonObject(): void
+    {
+        $log = new ConversationLog();
+        $log->appendUser('What time is it?');
+
+        $log->observe(['type' => 'TOOL_CALL_START', 'toolCallId' => 'tc-1', 'toolCallName' => 'get_time']);
+        $log->observe(['type' => 'TOOL_CALL_END', 'toolCallId' => 'tc-1']);
+        $log->observe([
+            'type' => 'TOOL_CALL_RESULT',
+            'messageId' => 'm-2',
+            'toolCallId' => 'tc-1',
+            'content' => 'not enabled',
+        ]);
+
+        $messages = $log->toMessages();
+
+        static::assertSame('{}', $messages[1]['toolCalls'][0]['function']['arguments']);
+    }
+
     public function testEventsWithUnknownTypeAreIgnored(): void
     {
         $log = new ConversationLog();
