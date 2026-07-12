@@ -1,5 +1,9 @@
 {
-    "symbol-whitelist" : [],
+    "symbol-whitelist" : [
+        "Swoole\\Coroutine",
+        "Swoole\\Coroutine\\WaitGroup",
+        "Swoole\\Http\\Response"
+    ],
     "php-core-extensions" : [
         "Core",
         "date",
