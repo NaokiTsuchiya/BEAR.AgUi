@@ -8,7 +8,6 @@ use CurlHandle;
 use JsonException;
 use RuntimeException;
 
-use function curl_close;
 use function curl_errno;
 use function curl_error;
 use function curl_exec;
@@ -119,7 +118,6 @@ final class AgUiHttpClient
         curl_exec($handle);
         $errorNumber = curl_errno($handle);
         $errorMessage = curl_error($handle);
-        curl_close($handle);
 
         if ($errorNumber !== 0) {
             throw new RuntimeException('AG-UI request failed: ' . $errorMessage);
