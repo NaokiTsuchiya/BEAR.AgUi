@@ -319,7 +319,9 @@ final class OpenAiStreamingLlmClientTest extends TestCase
             ]);
 
             $events = self::stream($http, '', [Message::user('hi')], []);
-            $last = $events[array_key_last($events)];
+            $lastKey = array_key_last($events);
+            static::assertNotNull($lastKey);
+            $last = $events[$lastKey];
             static::assertNotNull($last);
 
             static::assertSame(StreamEvent::MESSAGE_STOP, $last->type, "finish_reason={$finishReason}");
@@ -367,7 +369,7 @@ final class OpenAiStreamingLlmClientTest extends TestCase
     /** @param list<array<string, mixed>> $chunks */
     private static function scriptedHttp(array $chunks): StubHttpClient
     {
-        return new StubHttpClient(static fn(array $requestBody): iterable => $chunks);
+        return new StubHttpClient(static fn(array $_requestBody): iterable => $chunks);
     }
 
     /**

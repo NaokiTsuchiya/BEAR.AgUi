@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace NaokiTsuchiya\BEARAgUi\Input;
 
+use NaokiTsuchiya\BEARAgUi\Input\Message\Message;
 use NaokiTsuchiya\BEARAgUi\Support\JsonFixture;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -63,7 +64,7 @@ final class RunAgentInputParserTest extends TestCase
         static::assertSame('second', $input->userMessage);
         static::assertSame(
             ['user', 'assistant'],
-            array_map(static fn($message): string => $message->role(), $input->history),
+            array_map(static fn(Message $message): string => $message->role(), $input->history),
         );
     }
 

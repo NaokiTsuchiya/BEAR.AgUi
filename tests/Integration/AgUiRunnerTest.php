@@ -142,7 +142,9 @@ final class AgUiRunnerTest extends TestCase
         $types = self::types($sink);
         static::assertContains('TOOL_CALL_RESULT', $types);
         static::assertNotContains('RUN_ERROR', $types);
-        static::assertSame('RUN_FINISHED', $types[array_key_last($types)]);
+        $lastTypeKey = array_key_last($types);
+        static::assertNotNull($lastTypeKey);
+        static::assertSame('RUN_FINISHED', $types[$lastTypeKey]);
     }
 
     public function testConfirmationRequiredFinishesWithInterruptOutcome(): void
@@ -161,8 +163,9 @@ final class AgUiRunnerTest extends TestCase
         self::render(self::runner($llm, $dispatcher, [self::confirmableTool('writer')]), $input, $sink);
 
         $events = self::decode($sink);
-        $finished = $events[array_key_last($events)];
-        static::assertNotNull($finished);
+        $lastEventKey = array_key_last($events);
+        static::assertNotNull($lastEventKey);
+        $finished = $events[$lastEventKey];
         static::assertSame('RUN_FINISHED', $finished['type']);
 
         $outcome = $finished['outcome'];
@@ -187,7 +190,10 @@ final class AgUiRunnerTest extends TestCase
 
         self::render(self::runner(new FakeStreamingLlmClient(), new FakeDispatcher(), []), self::input('hi'), $sink);
 
-        static::assertSame('RUN_ERROR', self::types($sink)[array_key_last(self::types($sink))]);
+        $types = self::types($sink);
+        $lastTypeKey = array_key_last($types);
+        static::assertNotNull($lastTypeKey);
+        static::assertSame('RUN_ERROR', $types[$lastTypeKey]);
     }
 
     /** @param list<SchemaTool> $tools */

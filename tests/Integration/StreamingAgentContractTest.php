@@ -7,6 +7,7 @@ namespace NaokiTsuchiya\BEARAgUi\Integration;
 use BEAR\ToolUse\Llm\StreamEvent;
 use BEAR\ToolUse\Runtime\StreamingAgent;
 use NaokiTsuchiya\BEARAgUi\Adapter\AgUiAdapter;
+use NaokiTsuchiya\BEARAgUi\Event\AgUiEventInterface;
 use NaokiTsuchiya\BEARAgUi\Event\RunFinished;
 use NaokiTsuchiya\BEARAgUi\Event\RunStarted;
 use NaokiTsuchiya\BEARAgUi\Event\TextMessageContent;
@@ -143,7 +144,7 @@ final class StreamingAgentContractTest extends TestCase
         // Walk forward picking just the tool events.
         $toolEvents = array_values(array_filter(
             $events,
-            static fn($e) => (
+            static fn(AgUiEventInterface $e): bool => (
                 $e instanceof ToolCallStart
                 || $e instanceof ToolCallArgs
                 || $e instanceof ToolCallEnd

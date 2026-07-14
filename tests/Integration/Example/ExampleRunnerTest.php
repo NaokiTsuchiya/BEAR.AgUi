@@ -82,7 +82,9 @@ final class ExampleRunnerTest extends TestCase
         $events = self::decode($sink);
         static::assertSame('t-1', $events[0]['threadId']);
         static::assertSame('r-1', $events[0]['runId']);
-        $outcome = $events[array_key_last($events)]['outcome'];
+        $lastEventKey = array_key_last($events);
+        static::assertNotNull($lastEventKey);
+        $outcome = $events[$lastEventKey]['outcome'];
         static::assertIsArray($outcome);
         static::assertSame('success', $outcome['type']);
     }
@@ -171,7 +173,9 @@ final class ExampleRunnerTest extends TestCase
         static::assertSame(['RUN_STARTED', 'TOOL_CALL_START', 'RUN_FINISHED'], self::types($sink));
 
         $events = self::decode($sink);
-        $finished = $events[array_key_last($events)];
+        $lastEventKey = array_key_last($events);
+        static::assertNotNull($lastEventKey);
+        $finished = $events[$lastEventKey];
         $outcome = $finished['outcome'];
         static::assertIsArray($outcome);
         static::assertSame('interrupt', $outcome['type']);

@@ -20,6 +20,8 @@ use const JSON_THROW_ON_ERROR;
  * Scenario builders and generator-driving helpers shared by the parallel
  * agent tests: scripted LLM turns, Tool definitions, and consumption with
  * confirmation answers.
+ *
+ * @internal
  */
 trait ParallelAgentScenarioFixture
 {

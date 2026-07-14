@@ -19,6 +19,8 @@ use Psr\Log\NullLogger;
  * Shared helpers for end-to-end pipeline tests that drive a real
  * StreamingAgent through the recording decorators and adapter. Keeps the
  * test classes themselves focused on scenario assertions.
+ *
+ * @internal
  */
 trait StreamingPipelineFixture
 {
@@ -67,7 +69,7 @@ trait StreamingPipelineFixture
      */
     private function types(array $events): array
     {
-        return array_map(static fn($event) => $event::class, $events);
+        return array_map(static fn(AgUiEventInterface $event): string => $event::class, $events);
     }
 
     /**
