@@ -160,6 +160,21 @@ final class ConversationLogTest extends TestCase
         static::assertSame('{}', $messages[1]['toolCalls'][0]['function']['arguments']);
     }
 
+    public function testInterruptedRunClosesDanglingToolCallArguments(): void
+    {
+        $log = new ConversationLog();
+        $log->appendUser('Remind me to buy milk.');
+
+        // A confirmation interrupt ends the run right after TOOL_CALL_START:
+        // no TOOL_CALL_ARGS, no TOOL_CALL_RESULT.
+        $log->observe(['type' => 'TOOL_CALL_START', 'toolCallId' => 'tc-1', 'toolCallName' => 'reminder_set']);
+        $log->observe(['type' => 'RUN_FINISHED', 'threadId' => 't-1', 'runId' => 'r-1', 'outcome' => 'interrupt']);
+
+        $messages = $log->toMessages();
+
+        static::assertSame('{}', $messages[1]['toolCalls'][0]['function']['arguments']);
+    }
+
     public function testEventsWithUnknownTypeAreIgnored(): void
     {
         $log = new ConversationLog();

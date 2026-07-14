@@ -171,9 +171,10 @@ final class ConversationLog
      * A tool call with no TOOL_CALL_ARGS deltas (e.g. a no-argument tool, or
      * one rejected before its args streamed) would otherwise resend an
      * empty `arguments` string — not valid JSON, and the server rejects it
-     * (`function.arguments` must decode to a JSON object).
+     * (`function.arguments` must decode to a JSON object). Null closes
+     * every tool call of the open assistant message.
      */
-    private function closeToolCallArguments(string $toolCallId): void
+    private function closeToolCallArguments(string|null $toolCallId): void
     {
         if ($this->openAssistantIndex < 0) {
             return;
@@ -181,8 +182,12 @@ final class ConversationLog
 
         /** @var list<array<string, mixed>> $toolCalls */
         $toolCalls = $this->messages[$this->openAssistantIndex]['toolCalls'] ?? [];
+        if ($toolCalls === []) {
+            return;
+        }
+
         foreach ($toolCalls as $index => $toolCall) {
-            if ($toolCall['id'] !== $toolCallId) {
+            if ($toolCallId !== null && $toolCall['id'] !== $toolCallId) {
                 continue;
             }
 
@@ -198,8 +203,15 @@ final class ConversationLog
         $this->messages[$this->openAssistantIndex]['toolCalls'] = $toolCalls;
     }
 
+    /**
+     * An interrupted (or errored) run ends with TOOL_CALL_START but no
+     * TOOL_CALL_RESULT, so closeToolCallArguments() above never fires for
+     * that call — sweep the still-open assistant message on run close, or
+     * the next turn resends `arguments: ""` and the server 400s it.
+     */
     private function closeOpenAssistantMessage(): void
     {
+        $this->closeToolCallArguments(null);
         $this->openAssistantIndex = -1;
     }
 
