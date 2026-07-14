@@ -20,7 +20,6 @@
         "phpunit/phpunit": "^11.5",
         "openai-php/client": "^0.20",
         "guzzlehttp/guzzle": "^7.13",
-        "ext-swoole": "*",
         "swoole/ide-helper": "^6.0"
     },
     "suggest": {

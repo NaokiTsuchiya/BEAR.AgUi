@@ -47,7 +47,7 @@ jobs:
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: Check formatting
-        run: ./vendor/bin/mago format --check --reporting-format github
+        run: ./vendor/bin/mago format --check
 
       - name: Run Mago lint
         run: ./vendor/bin/mago lint --reporting-format github
