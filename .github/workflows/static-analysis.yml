@@ -31,7 +31,7 @@ jobs:
         with:
           php-version: ${{ inputs.php_version || '8.5' }}
           coverage: none
-          extensions: swoole
+          extensions: swoole-6.2.0
 
       - name: Get composer cache directory
         id: composer-cache
@@ -73,7 +73,7 @@ jobs:
         with:
           php-version: ${{ inputs.php_version || '8.4' }}
           coverage: none
-          extensions: swoole
+          extensions: swoole-6.2.0
 
       - name: Get composer cache directory
         id: composer-cache
@@ -109,7 +109,7 @@ jobs:
         with:
           php-version: ${{ inputs.php_version || '8.4' }}
           coverage: none
-          extensions: swoole
+          extensions: swoole-6.2.0
 
       - name: Get composer cache directory
         id: composer-cache
