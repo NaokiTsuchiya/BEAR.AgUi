@@ -69,6 +69,13 @@ final class RecordingLogger implements LoggerInterface
     #[Override]
     public function log($level, string|Stringable $message, array $context = []): void
     {
-        $this->entries[] = ['level' => (string) $level, 'message' => (string) $message, 'context' => $context];
+        /** @var array<string, mixed> $normalizedContext */
+        $normalizedContext = $context;
+
+        $this->entries[] = [
+            'level' => (string) $level,
+            'message' => (string) $message,
+            'context' => $normalizedContext,
+        ];
     }
 }

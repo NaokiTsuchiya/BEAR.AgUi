@@ -9,10 +9,12 @@ use NaokiTsuchiya\BEARAgUi\Fake\FakeDispatcher;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Throwable;
 
 #[CoversClass(RecordingDispatcher::class)]
 final class RecordingDispatcherTest extends TestCase
 {
+    /** @throws Throwable */
     public function testDispatchDelegatesAndRecordsResult(): void
     {
         $inner = new FakeDispatcher();
@@ -32,6 +34,7 @@ final class RecordingDispatcherTest extends TestCase
         static::assertFalse($outcome->isError);
     }
 
+    /** @throws Throwable */
     public function testDispatchRecordsErrorResult(): void
     {
         $inner = new FakeDispatcher();
@@ -48,6 +51,7 @@ final class RecordingDispatcherTest extends TestCase
         static::assertSame('boom', $outcome->content);
     }
 
+    /** @throws Throwable */
     public function testThrowsArePropagatedAfterRecordingErrorOutcome(): void
     {
         $inner = new FakeDispatcher();

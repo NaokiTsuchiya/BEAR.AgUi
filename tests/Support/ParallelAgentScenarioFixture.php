@@ -8,6 +8,7 @@ use BEAR\ToolUse\Llm\StreamEvent;
 use BEAR\ToolUse\Runtime\AgentEvent;
 use BEAR\ToolUse\Schema\Tool;
 use Generator;
+use PHPUnit\Framework\Assert;
 
 use function array_map;
 use function array_values;
@@ -35,6 +36,7 @@ trait ParallelAgentScenarioFixture
         $events = [];
         while ($stream->valid()) {
             $event = $stream->current();
+            Assert::assertInstanceOf(AgentEvent::class, $event);
             $events[] = $event;
             if ($event->type === AgentEvent::CONFIRMATION_REQUIRED) {
                 $stream->send($approval);

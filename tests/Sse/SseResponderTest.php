@@ -29,9 +29,15 @@ final class SseResponderTest extends TestCase
 
         static::assertSame('text/event-stream', $sink->headers['Content-Type']);
         static::assertCount(2, $sink->frames);
-        static::assertStringStartsWith('data: {"type":"RUN_STARTED"', $sink->frames[0]);
-        static::assertStringEndsWith("\n\n", $sink->frames[0]);
-        static::assertStringStartsWith('data: {"type":"TEXT_MESSAGE_CONTENT"', $sink->frames[1]);
+
+        $frame0 = $sink->frames[0];
+        static::assertNotNull($frame0);
+        static::assertStringStartsWith('data: {"type":"RUN_STARTED"', $frame0);
+        static::assertStringEndsWith("\n\n", $frame0);
+
+        $frame1 = $sink->frames[1];
+        static::assertNotNull($frame1);
+        static::assertStringStartsWith('data: {"type":"TEXT_MESSAGE_CONTENT"', $frame1);
     }
 
     /**
@@ -52,6 +58,7 @@ final class SseResponderTest extends TestCase
 
         $responder = new SseResponder(new SseEncoder());
 
+        /** @var Generator<int, TextMessageContent> $events */
         $responder->respond($events, new LoggingSink($log));
 
         static::assertSame(['yield:a', 'write', 'yield:b', 'write'], $log);

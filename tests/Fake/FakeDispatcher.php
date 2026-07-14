@@ -43,6 +43,10 @@ final class FakeDispatcher implements DispatcherInterface
         $this->scripts[$toolName][] = $error;
     }
 
+    /**
+     * @throws RuntimeException
+     * @throws Throwable
+     */
     #[Override]
     public function dispatch(ToolCall $toolCall): ToolResult
     {

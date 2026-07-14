@@ -71,7 +71,14 @@ final class OpenAiMessageMapperTest extends TestCase
         $mapped = (new OpenAiMessageMapper())->map('', [$assistant]);
 
         static::assertNull($mapped[0]['content']);
-        static::assertSame('{}', $mapped[0]['tool_calls'][0]['function']['arguments']);
+
+        $toolCalls = $mapped[0]['tool_calls'];
+        static::assertIsArray($toolCalls);
+        $toolCall = $toolCalls[0];
+        static::assertIsArray($toolCall);
+        $function = $toolCall['function'];
+        static::assertIsArray($function);
+        static::assertSame('{}', $function['arguments']);
     }
 
     public function testExpandsToolResultsToOneToolMessageEach(): void

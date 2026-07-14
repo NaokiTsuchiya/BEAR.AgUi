@@ -6,19 +6,19 @@ namespace NaokiTsuchiya\BEARAgUi\Example\StubLlm;
 
 use Example\StubLlm\CannedConversation;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use stdClass;
 
-use function array_column;
 use function array_filter;
 use function array_key_exists;
 use function array_key_last;
 use function array_keys;
 use function array_map;
-use function array_merge;
 use function array_slice;
 use function array_unique;
 use function array_values;
 use function implode;
+use function is_string;
 use function iterator_to_array;
 
 /**
@@ -35,6 +35,7 @@ final class CannedConversationTest extends TestCase
 {
     private const CREATED = 1_751_900_000;
 
+    /** @throws RuntimeException */
     public function testFirstTurnStreamsTextThenToolCallEndingInToolCalls(): void
     {
         $chunks = self::respond([
@@ -49,10 +50,19 @@ final class CannedConversationTest extends TestCase
         static::assertCount(1, $starts);
         static::assertSame('call_demo_1', $starts[0]['id']);
         static::assertSame('function', $starts[0]['type']);
-        static::assertSame('get_time', $starts[0]['function']['name']);
+        $startFunction = $starts[0]['function'];
+        static::assertIsArray($startFunction);
+        static::assertSame('get_time', $startFunction['name']);
 
         // Non-empty arguments fragments, in stream order: exactly two, concatenating to the full JSON.
-        $arguments = array_column(array_column(self::toolCallFragments($chunks), 'function'), 'arguments');
+        $arguments = array_map(static function (array $fragment): string {
+            $function = $fragment['function'];
+            self::assertIsArray($function);
+            $fragmentArguments = $function['arguments'];
+            self::assertIsString($fragmentArguments);
+
+            return $fragmentArguments;
+        }, self::toolCallFragments($chunks));
         $fragments = array_values(array_filter($arguments, static fn(string $fragment): bool => $fragment !== ''));
         static::assertCount(2, $fragments);
         static::assertSame('{"timezone":"UTC"}', implode('', $fragments));
@@ -60,6 +70,7 @@ final class CannedConversationTest extends TestCase
         self::assertFinishedWith('tool_calls', $chunks);
     }
 
+    /** @throws RuntimeException */
     public function testSecondTurnEchoesReceivedToolContentAndStops(): void
     {
         $toolContent = '2026-07-08T12:34:56+00:00';
@@ -78,6 +89,7 @@ final class CannedConversationTest extends TestCase
         self::assertFinishedWith('stop', $chunks);
     }
 
+    /** @throws RuntimeException */
     public function testTurnDetectionUsesTheLastMessageRoleOnly(): void
     {
         // A tool message earlier in history must NOT trigger the final turn.
@@ -92,6 +104,7 @@ final class CannedConversationTest extends TestCase
         self::assertFinishedWith('tool_calls', $chunks);
     }
 
+    /** @throws RuntimeException */
     public function testWeatherKeywordPlaysParallelToolScenario(): void
     {
         // The ALPS context message the M3 app appends lists every tool name;
@@ -106,11 +119,16 @@ final class CannedConversationTest extends TestCase
 
         $starts = self::toolCallStarts($chunks);
         static::assertCount(2, $starts);
-        static::assertSame('weather_get', $starts[0]['function']['name']);
-        static::assertSame('news_get', $starts[1]['function']['name']);
+        $firstFunction = $starts[0]['function'];
+        static::assertIsArray($firstFunction);
+        static::assertSame('weather_get', $firstFunction['name']);
+        $secondFunction = $starts[1]['function'];
+        static::assertIsArray($secondFunction);
+        static::assertSame('news_get', $secondFunction['name']);
         self::assertFinishedWith('tool_calls', $chunks);
     }
 
+    /** @throws RuntimeException */
     public function testRemindKeywordPlaysConfirmableReminderScenario(): void
     {
         $chunks = self::respond([
@@ -120,25 +138,35 @@ final class CannedConversationTest extends TestCase
 
         $starts = self::toolCallStarts($chunks);
         static::assertCount(1, $starts);
-        static::assertSame('reminder_put', $starts[0]['function']['name']);
+        $function = $starts[0]['function'];
+        static::assertIsArray($function);
+        static::assertSame('reminder_put', $function['name']);
         self::assertFinishedWith('tool_calls', $chunks);
     }
 
     /**
      * @param array<string, mixed> $requestBody
      *
-     * @return list<array<string, mixed>>
+     * @return non-empty-list<array<string, mixed>>
+     *
+     * @throws RuntimeException if the stub yields no chunks (never happens; documents the invariant).
      */
     private static function respond(array $requestBody): array
     {
-        return iterator_to_array((new CannedConversation(self::CREATED))->respond($requestBody), false);
+        $chunks = iterator_to_array((new CannedConversation(self::CREATED))->respond($requestBody), false);
+        self::assertNotEmpty($chunks);
+        if ($chunks === []) {
+            throw new RuntimeException('CannedConversation::respond() must yield at least one chunk.');
+        }
+
+        return $chunks;
     }
 
     /**
      * Every chunk carries the exact chat.completion.chunk envelope, echoes the
      * request model, and the LAST chunk has an empty-object delta.
      *
-     * @param list<array<string, mixed>> $chunks
+     * @param non-empty-list<array<string, mixed>> $chunks
      */
     private static function assertEnvelope(array $chunks, string $model): void
     {
@@ -149,11 +177,22 @@ final class CannedConversationTest extends TestCase
             static::assertSame('chat.completion.chunk', $chunk['object']);
             static::assertSame(self::CREATED, $chunk['created']);
             static::assertSame($model, $chunk['model']);
-            static::assertCount(1, $chunk['choices']);
-            static::assertSame(0, $chunk['choices'][0]['index']);
+
+            $choices = $chunk['choices'];
+            self::assertIsArray($choices);
+            static::assertCount(1, $choices);
+
+            $choice = $choices[0];
+            self::assertIsArray($choice);
+            static::assertSame(0, $choice['index']);
         }
 
-        static::assertEquals(new stdClass(), $chunks[array_key_last($chunks)]['choices'][0]['delta']);
+        $lastChunk = $chunks[array_key_last($chunks)];
+        $lastChoices = $lastChunk['choices'];
+        self::assertIsArray($lastChoices);
+        $lastChoice = $lastChoices[0];
+        self::assertIsArray($lastChoice);
+        static::assertEquals(new stdClass(), $lastChoice['delta']);
     }
 
     /**
@@ -163,7 +202,16 @@ final class CannedConversationTest extends TestCase
      */
     private static function assertFinishedWith(string $reason, array $chunks): void
     {
-        $reasons = array_map(static fn(array $chunk): string|null => $chunk['choices'][0]['finish_reason'], $chunks);
+        $reasons = array_map(static function (array $chunk): string|null {
+            $choices = $chunk['choices'];
+            self::assertIsArray($choices);
+            $choice = $choices[0];
+            self::assertIsArray($choice);
+            $finishReason = $choice['finish_reason'];
+            self::assertTrue($finishReason === null || is_string($finishReason));
+
+            return $finishReason;
+        }, $chunks);
 
         static::assertSame($reason, $reasons[array_key_last($reasons)]);
         static::assertSame([null], array_values(array_unique(array_slice($reasons, 0, -1))));
@@ -172,17 +220,42 @@ final class CannedConversationTest extends TestCase
     /**
      * @param list<array<string, mixed>> $chunks
      *
-     * @return list<array<string, mixed>> each chunk's delta, empty-object delta as []
+     * @return list<array<array-key, mixed>> each chunk's delta, empty-object delta as []
      */
     private static function deltas(array $chunks): array
     {
-        return array_map(static fn(array $chunk): array => (array) $chunk['choices'][0]['delta'], $chunks);
+        return array_map(static function (array $chunk): array {
+            $choices = $chunk['choices'];
+            self::assertIsArray($choices);
+            $choice = $choices[0];
+            self::assertIsArray($choice);
+            $delta = $choice['delta'];
+
+            if ($delta instanceof stdClass) {
+                return [];
+            }
+
+            self::assertIsArray($delta);
+
+            return $delta;
+        }, $chunks);
     }
 
     /** @param list<array<string, mixed>> $chunks */
     private static function concatContent(array $chunks): string
     {
-        return implode('', array_column(self::deltas($chunks), 'content'));
+        $contents = array_map(static function (array $delta): string {
+            if (!array_key_exists('content', $delta)) {
+                return '';
+            }
+
+            $content = $delta['content'];
+            self::assertIsString($content);
+
+            return $content;
+        }, self::deltas($chunks));
+
+        return implode('', $contents);
     }
 
     /**
@@ -190,7 +263,7 @@ final class CannedConversationTest extends TestCase
      *
      * @param list<array<string, mixed>> $chunks
      *
-     * @return list<array<string, mixed>>
+     * @return list<array<array-key, mixed>>
      */
     private static function toolCallStarts(array $chunks): array
     {
@@ -203,10 +276,24 @@ final class CannedConversationTest extends TestCase
     /**
      * @param list<array<string, mixed>> $chunks
      *
-     * @return list<array<string, mixed>>
+     * @return list<array<array-key, mixed>>
      */
     private static function toolCallFragments(array $chunks): array
     {
-        return array_merge([], ...array_column(self::deltas($chunks), 'tool_calls'));
+        $fragments = [];
+        foreach (self::deltas($chunks) as $delta) {
+            if (!array_key_exists('tool_calls', $delta)) {
+                continue;
+            }
+
+            $toolCalls = $delta['tool_calls'];
+            self::assertIsArray($toolCalls);
+            foreach ($toolCalls as $toolCall) {
+                self::assertIsArray($toolCall);
+                $fragments[] = $toolCall;
+            }
+        }
+
+        return $fragments;
     }
 }

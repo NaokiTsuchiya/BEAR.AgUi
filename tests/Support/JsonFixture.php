@@ -19,6 +19,7 @@ use function is_file;
  */
 final class JsonFixture
 {
+    /** @throws RuntimeException */
     public static function load(string $relativePath): string
     {
         $path = dirname(__DIR__) . '/Fixtures/' . $relativePath;

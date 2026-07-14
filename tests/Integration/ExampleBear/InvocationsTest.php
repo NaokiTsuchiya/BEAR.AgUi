@@ -19,6 +19,7 @@ use NaokiTsuchiya\BEARAgUi\Support\ExampleBearInjectorFactory;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
+use Throwable;
 
 use function array_map;
 use function assert;
@@ -45,6 +46,7 @@ use const JSON_THROW_ON_ERROR;
 #[CoversNothing]
 final class InvocationsTest extends TestCase
 {
+    /** @throws Throwable */
     #[RequiresPhpExtension('swoole')]
     public function testParallelRunPairsToolEventsByIdAndCarriesResourceBodies(): void
     {
@@ -74,16 +76,24 @@ final class InvocationsTest extends TestCase
             // the resource-driven Dispatcher hit Weather and News.
             $starts = $this->ofType($events, ToolCallStart::class);
             static::assertCount(2, $starts);
-            static::assertSame('call-w', $starts[0]->toolCallId);
-            static::assertSame('weather_get', $starts[0]->toolCallName);
-            static::assertSame('call-n', $starts[1]->toolCallId);
+            $start0 = $starts[0];
+            static::assertInstanceOf(ToolCallStart::class, $start0);
+            static::assertSame('call-w', $start0->toolCallId);
+            static::assertSame('weather_get', $start0->toolCallName);
+            $start1 = $starts[1];
+            static::assertInstanceOf(ToolCallStart::class, $start1);
+            static::assertSame('call-n', $start1->toolCallId);
 
             $results = $this->ofType($events, ToolCallResult::class);
             static::assertCount(2, $results);
-            static::assertSame('call-w', $results[0]->toolCallId);
-            static::assertStringContainsString('"condition":"sunny"', $results[0]->content);
-            static::assertSame('call-n', $results[1]->toolCallId);
-            static::assertStringContainsString('"headline"', $results[1]->content);
+            $result0 = $results[0];
+            static::assertInstanceOf(ToolCallResult::class, $result0);
+            static::assertSame('call-w', $result0->toolCallId);
+            static::assertStringContainsString('"condition":"sunny"', $result0->content);
+            $result1 = $results[1];
+            static::assertInstanceOf(ToolCallResult::class, $result1);
+            static::assertSame('call-n', $result1->toolCallId);
+            static::assertStringContainsString('"headline"', $result1->content);
 
             $finished = $events[count($events) - 1];
             static::assertInstanceOf(RunFinished::class, $finished);
@@ -110,8 +120,15 @@ final class InvocationsTest extends TestCase
         static::assertSame('interrupt', $this->outcomeType($finished));
 
         $decoded = json_decode(json_encode($finished, JSON_THROW_ON_ERROR), true);
-        static::assertSame('tool_confirmation', $decoded['outcome']['interrupts'][0]['reason']);
-        static::assertSame('call-r', $decoded['outcome']['interrupts'][0]['toolCallId']);
+        static::assertIsArray($decoded);
+        $outcome = $decoded['outcome'];
+        static::assertIsArray($outcome);
+        $interrupts = $outcome['interrupts'];
+        static::assertIsArray($interrupts);
+        $interrupt0 = $interrupts[0];
+        static::assertIsArray($interrupt0);
+        static::assertSame('tool_confirmation', $interrupt0['reason']);
+        static::assertSame('call-r', $interrupt0['toolCallId']);
     }
 
     public function testUnsafeMessagePostIsGovernedAwayByAlpsPolicy(): void
@@ -136,7 +153,9 @@ final class InvocationsTest extends TestCase
 
         // The governance itself: the tools offered to the LLM never
         // included message_post (stripped by safeAndIdempotent).
-        $offered = array_map(static fn(Tool $tool): string => $tool->name, $llm->requests[0]['tools']);
+        $request0 = $llm->requests[0];
+        static::assertNotNull($request0);
+        $offered = array_map(static fn(Tool $tool): string => $tool->name, $request0['tools']);
         static::assertSame(['weather_get', 'news_get', 'reminder_put'], $offered);
 
         // The refused call is fed back to the model as an error tool_result
@@ -146,7 +165,9 @@ final class InvocationsTest extends TestCase
 
         $results = $this->ofType($events, ToolCallResult::class);
         static::assertCount(1, $results);
-        static::assertSame('call-m', $results[0]->toolCallId);
+        $result0 = $results[0];
+        static::assertInstanceOf(ToolCallResult::class, $result0);
+        static::assertSame('call-m', $result0->toolCallId);
     }
 
     public function testMidRunFailureSurfacesAsRunErrorOnTheOpenStream(): void
@@ -169,6 +190,7 @@ final class InvocationsTest extends TestCase
         $ro = $this->invocations()->post('page://self/invocations', ['rawBody' => '{not json']);
 
         static::assertSame(400, $ro->code);
+        static::assertIsArray($ro->body);
         static::assertSame('VALIDATION_ERROR', $ro->body['code']);
         static::assertNotSame([], $ro->body['errors']);
     }
@@ -184,6 +206,7 @@ final class InvocationsTest extends TestCase
         $ro = $this->invocations()->post('page://self/invocations', ['rawBody' => $body]);
 
         static::assertSame(400, $ro->code);
+        static::assertIsArray($ro->body);
         static::assertSame('VALIDATION_ERROR', $ro->body['code']);
     }
 
@@ -192,6 +215,7 @@ final class InvocationsTest extends TestCase
         $ro = ExampleBearInjectorFactory::app()->getInstance(ResourceInterface::class)->get('page://self/ping');
 
         static::assertSame(200, $ro->code);
+        static::assertIsArray($ro->body);
         static::assertSame('Healthy', $ro->body['status']);
     }
 
@@ -220,6 +244,7 @@ final class InvocationsTest extends TestCase
 
         $events = [];
         foreach ($ro->body as $event) {
+            static::assertInstanceOf(AgUiEventInterface::class, $event);
             $events[] = $event;
         }
 
@@ -251,7 +276,10 @@ final class InvocationsTest extends TestCase
     private function outcomeType(RunFinished $finished): string
     {
         $decoded = json_decode(json_encode($finished, JSON_THROW_ON_ERROR), true);
+        static::assertIsArray($decoded);
+        $outcome = $decoded['outcome'];
+        static::assertIsArray($outcome);
 
-        return (string) $decoded['outcome']['type'];
+        return (string) $outcome['type'];
     }
 }

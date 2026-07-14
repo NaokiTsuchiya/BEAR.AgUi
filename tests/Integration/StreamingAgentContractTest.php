@@ -62,7 +62,9 @@ final class StreamingAgentContractTest extends TestCase
             ],
             $types,
         );
+        static::assertInstanceOf(TextMessageContent::class, $events[2]);
         static::assertSame('hello ', $events[2]->delta);
+        static::assertInstanceOf(TextMessageContent::class, $events[3]);
         static::assertSame('world', $events[3]->delta);
     }
 
@@ -104,9 +106,12 @@ final class StreamingAgentContractTest extends TestCase
             $types,
         );
 
+        static::assertInstanceOf(ToolCallStart::class, $events[1]);
         static::assertSame('call-1', $events[1]->toolCallId);
         static::assertSame('search', $events[1]->toolCallName);
+        static::assertInstanceOf(ToolCallArgs::class, $events[2]);
         static::assertSame('{"q":"hi"}', $events[2]->delta);
+        static::assertInstanceOf(ToolCallResult::class, $events[4]);
         static::assertSame('call-1', $events[4]->toolCallId);
         static::assertSame('hits', $events[4]->content);
     }
@@ -185,9 +190,16 @@ final class StreamingAgentContractTest extends TestCase
         $finished = end($events);
         static::assertInstanceOf(RunFinished::class, $finished);
         $decoded = json_decode(json_encode($finished, JSON_THROW_ON_ERROR), true);
-        static::assertSame('interrupt', $decoded['outcome']['type']);
-        static::assertSame('tool_confirmation', $decoded['outcome']['interrupts'][0]['reason']);
-        static::assertSame('call-1', $decoded['outcome']['interrupts'][0]['toolCallId']);
+        static::assertIsArray($decoded);
+        $outcome = $decoded['outcome'];
+        static::assertIsArray($outcome);
+        static::assertSame('interrupt', $outcome['type']);
+        $interrupts = $outcome['interrupts'];
+        static::assertIsArray($interrupts);
+        $interrupt = $interrupts[0];
+        static::assertIsArray($interrupt);
+        static::assertSame('tool_confirmation', $interrupt['reason']);
+        static::assertSame('call-1', $interrupt['toolCallId']);
         static::assertCount(0, $dispatcher->calls);
     }
 
@@ -213,7 +225,7 @@ final class StreamingAgentContractTest extends TestCase
 
         [$events] = $this->runPipeline($llm, $dispatcher, [$this->tool('search')], 'hi');
         $toolResult = $this->firstOf($events, ToolCallResult::class);
-        static::assertNotNull($toolResult);
+        static::assertInstanceOf(ToolCallResult::class, $toolResult);
         static::assertStringContainsString('RuntimeException', $toolResult->content);
         static::assertStringContainsString('disk full', $toolResult->content);
         static::assertInstanceOf(RunFinished::class, end($events));
