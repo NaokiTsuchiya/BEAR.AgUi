@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<!--
+  Build-tool-free React chat UI for the BEAR.AgUi showcase (tasks-m5, D31).
+
+  One self-contained static page: react / react-dom (UMD) and
+  @babel/standalone come from CDN script tags, JSX lives in the
+  <script type="text/babel"> block below, and no Node/npm/bundler is
+  involved. Served same-origin by public/server.php (GET /), so the
+  fetch() to /invocations needs no CORS handling.
+
+  Like the M4 CLI client (D30), this page depends on no library type —
+  browser JS could not import PHP classes anyway — and reads only the
+  wire format documented in docs/reference/ag-ui-protocol.md.
+  SseFrameReader and ConversationLog below mirror the state machines of
+  example/cli-client/src/SseFrameReader.php and ConversationLog.php
+  one-to-one (same logic, reimplemented per platform — not shared).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BEAR.AgUi — chat</title>
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", sans-serif;
+      background: #f4f5f7;
+      color: #1f2328;
+    }
+    #root { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+    header {
+      padding: 0.75rem 1.25rem;
+      background: #ffffff;
+      border-bottom: 1px solid #d8dce1;
+    }
+    header h1 { margin: 0; font-size: 1rem; }
+    header p { margin: 0.2rem 0 0; font-size: 0.75rem; color: #6a737d; }
+    main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+    }
+    .conversation {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .bubble {
+      max-width: 85%;
+      padding: 0.55rem 0.8rem;
+      border-radius: 0.75rem;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+      line-height: 1.45;
+    }
+    .user { align-self: flex-end; background: #1a56db; color: #ffffff; }
+    .assistant { align-self: flex-start; background: #ffffff; border: 1px solid #d8dce1; }
+    .tool {
+      align-self: flex-start;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.78rem;
+      color: #57606a;
+      background: #eef1f4;
+      border-radius: 0.5rem;
+      padding: 0.35rem 0.6rem;
+      max-width: 85%;
+      overflow-wrap: break-word;
+    }
+    .interrupt {
+      align-self: stretch;
+      background: #fff8e1;
+      border: 1px solid #e6c860;
+      border-radius: 0.5rem;
+      padding: 0.55rem 0.8rem;
+      font-size: 0.85rem;
+    }
+    .interrupt .note { margin-top: 0.3rem; font-size: 0.75rem; color: #8a6d1a; }
+    .error {
+      align-self: stretch;
+      background: #fdecea;
+      border: 1px solid #e5a09a;
+      border-radius: 0.5rem;
+      padding: 0.55rem 0.8rem;
+      color: #b42318;
+      font-size: 0.85rem;
+    }
+    footer {
+      padding: 0.75rem 1rem;
+      background: #ffffff;
+      border-top: 1px solid #d8dce1;
+    }
+    footer form {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      gap: 0.5rem;
+    }
+    footer input {
+      flex: 1;
+      padding: 0.55rem 0.8rem;
+      font-size: 0.95rem;
+      border: 1px solid #c7ced6;
+      border-radius: 0.5rem;
+    }
+    footer input:focus { outline: 2px solid #1a56db; border-color: transparent; }
+    footer button {
+      padding: 0.55rem 1.1rem;
+      font-size: 0.95rem;
+      border: none;
+      border-radius: 0.5rem;
+      background: #1a56db;
+      color: #ffffff;
+      cursor: pointer;
+    }
+    footer button:disabled { background: #9db3dd; cursor: default; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react">
+    'use strict';
+
+    const stringOrEmpty = (value) => (typeof value === 'string' ? value : '');
+
+    const stringOrNewId = (value) =>
+      typeof value === 'string' && value !== '' ? value : newId();
+
+    function newId() {
+      const bytes = new Uint8Array(8);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    /**
+     * Splits an arbitrary byte stream into complete SSE frames and decodes
+     * their JSON payload — the JS mirror of the M4 CLI client's
+     * SseFrameReader (PHP). A frame is any run of bytes terminated by a
+     * blank line (`\n\n`); chunk boundaries from the HTTP transport are not
+     * guaranteed to line up with frame boundaries, so incomplete frames are
+     * buffered across feed() calls. TextDecoder runs in streaming mode so a
+     * UTF-8 sequence split across chunks also survives.
+     */
+    class SseFrameReader {
+      constructor() {
+        this.buffer = '';
+        this.decoder = new TextDecoder();
+      }
+
+      /** @param {Uint8Array} chunk @returns {string[]} complete frames, without the blank-line terminator */
+      feed(chunk) {
+        this.buffer += this.decoder.decode(chunk, { stream: true });
+
+        const frames = [];
+        let boundary = this.buffer.indexOf('\n\n');
+        while (boundary !== -1) {
+          frames.push(this.buffer.slice(0, boundary));
+          this.buffer = this.buffer.slice(boundary + 2);
+          boundary = this.buffer.indexOf('\n\n');
+        }
+
+        return frames;
+      }
+
+      /** @returns {object|null} null for non-data lines (comments, `[DONE]`, blank frames) */
+      decode(frame) {
+        for (const line of frame.split('\n')) {
+          if (!line.startsWith('data:')) {
+            continue;
+          }
+
+          const payload = line.slice('data:'.length).trim();
+          if (payload === '' || payload === '[DONE]') {
+            return null;
+          }
+
+          let value;
+          try {
+            value = JSON.parse(payload);
+          } catch {
+            return null;
+          }
+
+          return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : null;
+        }
+
+        return null;
+      }
+    }
+
+    /**
+     * Reconstructs AG-UI `messages[]` (wire-format objects) from the SSE
+     * events observed during each run — the JS mirror of the M4 CLI
+     * client's ConversationLog (PHP). AG-UI is server-side stateless: the
+     * browser is the source of truth for conversation history, and resends
+     * the accumulated messages in full on every run.
+     */
+    class ConversationLog {
+      constructor() {
+        this.messages = [];
+        this.openAssistantIndex = -1;
+      }
+
+      appendUser(text) {
+        this.messages.push({ id: newId(), role: 'user', content: text });
+      }
+
+      observe(event) {
+        switch (event.type) {
+          case 'TEXT_MESSAGE_START':
+            this.openAssistantMessage(event);
+            break;
+          case 'TEXT_MESSAGE_CONTENT':
+            this.appendAssistantContent(event);
+            break;
+          case 'TOOL_CALL_START':
+            this.openToolCall(event);
+            break;
+          case 'TOOL_CALL_ARGS':
+            this.appendToolCallArguments(event);
+            break;
+          case 'TOOL_CALL_RESULT':
+            this.appendToolResult(event);
+            break;
+          case 'RUN_FINISHED':
+          case 'RUN_ERROR':
+            this.closeOpenAssistantMessage();
+            break;
+          default:
+            break;
+        }
+      }
+
+      /** @returns {object[]} history accumulated so far, ending with the just-appended trigger */
+      toMessages() {
+        return this.messages;
+      }
+
+      openAssistantMessage(event) {
+        this.messages.push({
+          id: stringOrNewId(event.messageId),
+          role: 'assistant',
+          content: '',
+        });
+        this.openAssistantIndex = this.messages.length - 1;
+      }
+
+      appendAssistantContent(event) {
+        if (this.openAssistantIndex < 0) {
+          return;
+        }
+
+        this.messages[this.openAssistantIndex].content += stringOrEmpty(event.delta);
+      }
+
+      openToolCall(event) {
+        // A tool call is not always preceded by TEXT_MESSAGE_START (a run
+        // can go straight from RUN_STARTED to TOOL_CALL_START); open the
+        // holding assistant message on demand in that case.
+        const index = this.currentOrNewAssistantIndex();
+
+        const message = this.messages[index];
+        if (!Array.isArray(message.toolCalls)) {
+          message.toolCalls = [];
+        }
+
+        message.toolCalls.push({
+          id: stringOrEmpty(event.toolCallId),
+          type: 'function',
+          function: { name: stringOrEmpty(event.toolCallName), arguments: '' },
+        });
+      }
+
+      currentOrNewAssistantIndex() {
+        if (this.openAssistantIndex < 0) {
+          this.messages.push({ id: newId(), role: 'assistant', content: '' });
+          this.openAssistantIndex = this.messages.length - 1;
+        }
+
+        return this.openAssistantIndex;
+      }
+
+      appendToolCallArguments(event) {
+        if (this.openAssistantIndex < 0) {
+          return;
+        }
+
+        const toolCallId = stringOrEmpty(event.toolCallId);
+        const delta = stringOrEmpty(event.delta);
+        for (const toolCall of this.messages[this.openAssistantIndex].toolCalls ?? []) {
+          if (toolCall.id === toolCallId) {
+            toolCall.function.arguments += delta;
+          }
+        }
+      }
+
+      appendToolResult(event) {
+        const toolCallId = stringOrEmpty(event.toolCallId);
+        this.closeToolCallArguments(toolCallId);
+
+        this.messages.push({
+          id: stringOrNewId(event.messageId),
+          role: 'tool',
+          content: stringOrEmpty(event.content),
+          toolCallId,
+        });
+      }
+
+      // A tool call with no TOOL_CALL_ARGS deltas (e.g. a no-argument tool,
+      // or one rejected before its args streamed) would otherwise resend an
+      // empty `arguments` string — not valid JSON, and the server rejects
+      // it (`function.arguments` must decode to a JSON object).
+      closeToolCallArguments(toolCallId) {
+        if (this.openAssistantIndex < 0) {
+          return;
+        }
+
+        for (const toolCall of this.messages[this.openAssistantIndex].toolCalls ?? []) {
+          if (toolCall.id === toolCallId && toolCall.function.arguments === '') {
+            toolCall.function.arguments = '{}';
+          }
+        }
+      }
+
+      // An interrupted (or errored) run ends with TOOL_CALL_START but no
+      // TOOL_CALL_RESULT, so closeToolCallArguments() above never fires for
+      // that call — sweep the still-open assistant message on run close, or
+      // the next turn resends `arguments: ""` and the server 400s it.
+      closeOpenAssistantMessage() {
+        if (this.openAssistantIndex >= 0) {
+          for (const toolCall of this.messages[this.openAssistantIndex].toolCalls ?? []) {
+            if (toolCall.function.arguments === '') {
+              toolCall.function.arguments = '{}';
+            }
+          }
+        }
+
+        this.openAssistantIndex = -1;
+      }
+    }
+
+    /**
+     * POSTs a RunAgentInput body to /invocations (same origin — no CORS)
+     * and streams the SSE response with fetch() + ReadableStream, invoking
+     * onEvent for every decoded frame as it arrives (not buffered).
+     * EventSource cannot be used here: AG-UI requires POST with a JSON
+     * body, and EventSource only issues GET (D31).
+     *
+     * The two response shapes the server produces are told apart by
+     * Content-Type: `text/event-stream` for a normal run,
+     * `application/json` for a pre-stream 400 validation failure — the
+     * same dichotomy the M4 CLI client handles.
+     */
+    async function streamRun(body, onEvent) {
+      const response = await fetch('/invocations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        body: JSON.stringify(body),
+      });
+
+      const contentType = (response.headers.get('Content-Type') ?? '').toLowerCase();
+      if (contentType.startsWith('application/json')) {
+        onEvent({ type: 'RUN_ERROR', message: describeValidationError(await response.text()) });
+        return;
+      }
+
+      const frameReader = new SseFrameReader();
+      const reader = response.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+          return;
+        }
+
+        for (const frame of frameReader.feed(value)) {
+          const decoded = frameReader.decode(frame);
+          if (decoded !== null) {
+            onEvent(decoded);
+          }
+        }
+      }
+    }
+
+    function describeValidationError(rawJsonBody) {
+      let decoded;
+      try {
+        decoded = JSON.parse(rawJsonBody);
+      } catch {
+        return rawJsonBody;
+      }
+
+      if (typeof decoded !== 'object' || decoded === null || !Array.isArray(decoded.errors)) {
+        return rawJsonBody;
+      }
+
+      const messages = decoded.errors
+        .map((error) => (error !== null && typeof error === 'object' ? error.message : null))
+        .filter((message) => typeof message === 'string');
+
+      return messages.length === 0 ? rawJsonBody : messages.join('; ');
+    }
+
+    /**
+     * Maps one decoded AG-UI event onto the displayed entry list — the UI
+     * counterpart of the M4 CLI client's EventRenderer, expressed as a pure
+     * (entries, event) => entries reducer so React state updates stay
+     * immutable.
+     */
+    function applyEvent(entries, event) {
+      switch (event.type) {
+        case 'TEXT_MESSAGE_START':
+          return [...entries, { kind: 'assistant', id: stringOrEmpty(event.messageId), text: '' }];
+        case 'TEXT_MESSAGE_CONTENT':
+          return entries.map((entry) =>
+            entry.kind === 'assistant' && entry.id === event.messageId
+              ? { ...entry, text: entry.text + stringOrEmpty(event.delta) }
+              : entry);
+        case 'TOOL_CALL_START':
+          return [...entries, {
+            kind: 'tool',
+            id: stringOrEmpty(event.toolCallId),
+            name: stringOrEmpty(event.toolCallName),
+            result: null,
+          }];
+        case 'TOOL_CALL_RESULT':
+          return entries.map((entry) =>
+            entry.kind === 'tool' && entry.id === event.toolCallId
+              ? { ...entry, result: stringOrEmpty(event.content) }
+              : entry);
+        case 'RUN_FINISHED': {
+          const outcome = event.outcome;
+          if (outcome === null || typeof outcome !== 'object' || outcome.type !== 'interrupt') {
+            return entries;
+          }
+
+          const texts = (Array.isArray(outcome.interrupts) ? outcome.interrupts : [])
+            .map((interrupt) =>
+              interrupt !== null && typeof interrupt === 'object'
+                ? stringOrEmpty(interrupt.message ?? interrupt.reason)
+                : '')
+            .filter((text) => text !== '');
+
+          return [...entries, { kind: 'interrupt', texts }];
+        }
+        case 'RUN_ERROR':
+          return [...entries, { kind: 'error', text: stringOrEmpty(event.message) }];
+        default:
+          return entries;
+      }
+    }
+
+    function Entry({ entry }) {
+      switch (entry.kind) {
+        case 'user':
+          return <div className="bubble user">{entry.text}</div>;
+        case 'assistant':
+          return <div className="bubble assistant">{entry.text}</div>;
+        case 'tool':
+          return (
+            <div className="tool">
+              {entry.result === null
+                ? <span>🔧 {entry.name} …</span>
+                : <span>🔧 {entry.name} → {entry.result}</span>}
+            </div>
+          );
+        case 'interrupt':
+          return (
+            <div className="interrupt">
+              {entry.texts.map((text, index) => <div key={index}>⏸ {text}</div>)}
+              <div className="note">このツール呼び出しは再開できません（v1 の既知の制約）。</div>
+            </div>
+          );
+        case 'error':
+          return <div className="error">⚠ {entry.text}</div>;
+        default:
+          return null;
+      }
+    }
+
+    function App() {
+      const [entries, setEntries] = React.useState([]);
+      const [input, setInput] = React.useState('');
+      const [busy, setBusy] = React.useState(false);
+      // threadId is fixed for the page session, runId is fresh per turn —
+      // the client issues both (the server only validates). The log lives
+      // in a ref: it is the history ledger, not render state.
+      const threadIdRef = React.useRef(null);
+      if (threadIdRef.current === null) {
+        threadIdRef.current = newId();
+      }
+      const logRef = React.useRef(null);
+      if (logRef.current === null) {
+        logRef.current = new ConversationLog();
+      }
+      const scrollRef = React.useRef(null);
+      const inputRef = React.useRef(null);
+
+      React.useEffect(() => {
+        const container = scrollRef.current;
+        if (container !== null) {
+          container.scrollTop = container.scrollHeight;
+        }
+      }, [entries]);
+
+      // The input is disabled while a run streams, which drops focus;
+      // give it back when the turn ends so multi-turn chat flows.
+      React.useEffect(() => {
+        if (!busy && inputRef.current !== null) {
+          inputRef.current.focus();
+        }
+      }, [busy]);
+
+      async function handleSubmit(event) {
+        event.preventDefault();
+        const text = input.trim();
+        if (text === '' || busy) {
+          return;
+        }
+
+        setInput('');
+        setBusy(true);
+        const log = logRef.current;
+        log.appendUser(text);
+        setEntries((previous) => [...previous, { kind: 'user', text }]);
+
+        const body = {
+          threadId: threadIdRef.current,
+          runId: newId(),
+          messages: log.toMessages(),
+        };
+
+        try {
+          await streamRun(body, (agUiEvent) => {
+            log.observe(agUiEvent);
+            setEntries((previous) => applyEvent(previous, agUiEvent));
+          });
+        } catch (error) {
+          setEntries((previous) => [...previous, { kind: 'error', text: String(error) }]);
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      return (
+        <React.Fragment>
+          <header>
+            <h1>BEAR.AgUi — chat</h1>
+            <p>
+              Build-tool-free React over AG-UI SSE. Try: “Weather in Tokyo and the news, please.”
+              (parallel tools) or “Remind me to buy milk.” (interrupt)
+            </p>
+          </header>
+          <main ref={scrollRef}>
+            <div className="conversation">
+              {entries.map((entry, index) => <Entry key={index} entry={entry} />)}
+            </div>
+          </main>
+          <footer>
+            <form onSubmit={handleSubmit}>
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="Type a message…"
+                disabled={busy}
+                autoFocus
+              />
+              <button type="submit" disabled={busy || input.trim() === ''}>
+                {busy ? '…' : 'Send'}
+              </button>
+            </form>
+          </footer>
+        </React.Fragment>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

@@ -10,11 +10,17 @@
  * `Runtime::enableCoroutine()` hooks blocking I/O (the demo tools' usleep)
  * into the scheduler so parallel dispatch really overlaps.
  *
- * Routes (AgentCore convention, D18):
+ * Routes (AgentCore convention, D18; chat UI added by tasks-m5 T1, D31):
  *
+ *   GET  /             build-tool-free React chat UI → 200 HTML (chat.html,
+ *                      re-read per request so edits show up on reload)
  *   GET  /ping         health probe → 200 JSON
  *   POST /invocations  AG-UI run → SSE stream (400 JSON on parse failure)
  *   anything else      404 JSON
+ *
+ * The chat page is served here, not through BEAR.Resource: a static asset
+ * is not a tool resource's concern, and same-origin delivery keeps the UI
+ * free of any CORS handling (D31).
  *
  * Run with:
  *
@@ -60,6 +66,22 @@ $server->on('request', static function (Request $request, Response $response) us
     $path = (string) ($request->server['request_uri'] ?? '/');
     $responder = new SwooleResponder($response);
 
+    if ($method === 'GET' && $path === '/') {
+        $html = file_get_contents(__DIR__ . '/chat.html');
+        if ($html === false) {
+            $response->status(500);
+            $response->header('Content-Type', 'application/json');
+            $response->end('{"code":"INTERNAL","message":"chat.html is missing next to server.php."}');
+
+            return;
+        }
+
+        $response->header('Content-Type', 'text/html; charset=utf-8');
+        $response->end($html);
+
+        return;
+    }
+
     if ($method === 'GET' && $path === '/ping') {
         $resource->get('page://self/ping')->transfer($responder, []);
 
@@ -76,7 +98,7 @@ $server->on('request', static function (Request $request, Response $response) us
 
     $response->status(404);
     $response->header('Content-Type', 'application/json');
-    $response->end('{"code":"NOT_FOUND","message":"This server serves GET /ping and POST /invocations only."}');
+    $response->end('{"code":"NOT_FOUND","message":"This server serves GET /, GET /ping and POST /invocations only."}');
 });
 
 $server->start();
