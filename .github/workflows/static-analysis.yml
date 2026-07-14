@@ -2,9 +2,10 @@ name: Static Analysis
 
 on:
   push:
+    branches:
+      - main
     paths-ignore:
       - '**.md'
-  pull_request:
   workflow_dispatch:
     inputs:
       php_version:
