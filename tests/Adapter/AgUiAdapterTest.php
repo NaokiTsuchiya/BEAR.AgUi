@@ -87,11 +87,21 @@ final class AgUiAdapterTest extends TestCase
         static::assertInstanceOf(RunFinished::class, $events[1]);
 
         $decoded = json_decode(json_encode($events[1], JSON_THROW_ON_ERROR), true);
-        static::assertSame('interrupt', $decoded['outcome']['type']);
-        static::assertCount(1, $decoded['outcome']['interrupts']);
-        static::assertSame('tool_confirmation', $decoded['outcome']['interrupts'][0]['reason']);
-        static::assertSame('About to write /x', $decoded['outcome']['interrupts'][0]['message']);
-        static::assertSame('call-9', $decoded['outcome']['interrupts'][0]['toolCallId']);
+        static::assertIsArray($decoded);
+
+        $outcome = $decoded['outcome'];
+        static::assertIsArray($outcome);
+        static::assertSame('interrupt', $outcome['type']);
+
+        $interrupts = $outcome['interrupts'];
+        static::assertIsArray($interrupts);
+        static::assertCount(1, $interrupts);
+
+        $interrupt = $interrupts[0];
+        static::assertIsArray($interrupt);
+        static::assertSame('tool_confirmation', $interrupt['reason']);
+        static::assertSame('About to write /x', $interrupt['message']);
+        static::assertSame('call-9', $interrupt['toolCallId']);
     }
 
     public function testAgentEventErrorBecomesRunErrorAndTerminates(): void
@@ -127,16 +137,20 @@ final class AgUiAdapterTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testThrownDuringStreamLogsExceptionAndEmitsGenericRunError(): void
     {
         $registry = new ToolCallRegistry();
         $logger = new RecordingLogger();
         $adapter = new AgUiAdapter($logger);
 
-        $throwing = (static function (): Generator {
-            yield AgentEvent::textDelta('hi');
-            throw new RuntimeException('boom');
-        })();
+        $throwing = (
+            /** @throws RuntimeException */
+            static function (): Generator {
+                yield AgentEvent::textDelta('hi');
+                throw new RuntimeException('boom');
+            }
+        )();
 
         $events = $this->collect($adapter->run($throwing, 't', 'r', $registry));
 

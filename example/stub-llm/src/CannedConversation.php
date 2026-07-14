@@ -53,11 +53,11 @@ final readonly class CannedConversation
     private function toolCallTurn(string $model, string $scenario): array
     {
         $chunks = [$this->chunk($model, ['role' => 'assistant'], null)];
-        foreach (StubScenario::LEAD_TEXT[$scenario] as $text) {
+        foreach (StubScenario::LEAD_TEXT[$scenario] ?? [] as $text) {
             $chunks[] = $this->chunk($model, ['content' => $text], null);
         }
 
-        foreach (StubScenario::TOOL_CALLS[$scenario] as $index => [$id, $name, $argumentChunks]) {
+        foreach (StubScenario::TOOL_CALLS[$scenario] ?? [] as $index => [$id, $name, $argumentChunks]) {
             $chunks[] = $this->chunk(
                 $model,
                 [

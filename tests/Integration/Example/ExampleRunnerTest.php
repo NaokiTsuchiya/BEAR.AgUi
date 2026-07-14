@@ -22,6 +22,7 @@ use NaokiTsuchiya\BEARAgUi\ToolUse\StreamingAgentFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use RuntimeException;
 
 use function array_column;
 use function array_key_last;
@@ -56,6 +57,7 @@ use const JSON_THROW_ON_ERROR;
 #[CoversClass(SseResponder::class)]
 final class ExampleRunnerTest extends TestCase
 {
+    /** @throws RuntimeException */
     public function testSingleTextTurnStreamsLifecycleFromWireBodyToSseFrames(): void
     {
         $llm = new FakeStreamingLlmClient();
@@ -80,9 +82,14 @@ final class ExampleRunnerTest extends TestCase
         $events = self::decode($sink);
         static::assertSame('t-1', $events[0]['threadId']);
         static::assertSame('r-1', $events[0]['runId']);
-        static::assertSame('success', $events[array_key_last($events)]['outcome']['type']);
+        $lastEventKey = array_key_last($events);
+        static::assertNotNull($lastEventKey);
+        $outcome = $events[$lastEventKey]['outcome'];
+        static::assertIsArray($outcome);
+        static::assertSame('success', $outcome['type']);
     }
 
+    /** @throws RuntimeException */
     public function testToolLoopPairsCallFramesAndMintsANewMessageIdForFinalText(): void
     {
         $llm = new FakeStreamingLlmClient();
@@ -146,6 +153,7 @@ final class ExampleRunnerTest extends TestCase
         static::assertNotSame($events[1]['messageId'], $events[8]['messageId']);
     }
 
+    /** @throws RuntimeException */
     public function testConfirmableToolFinishesWithInterruptOutcome(): void
     {
         $llm = new FakeStreamingLlmClient();
@@ -165,13 +173,23 @@ final class ExampleRunnerTest extends TestCase
         static::assertSame(['RUN_STARTED', 'TOOL_CALL_START', 'RUN_FINISHED'], self::types($sink));
 
         $events = self::decode($sink);
-        $finished = $events[array_key_last($events)];
-        static::assertSame('interrupt', $finished['outcome']['type']);
-        static::assertSame('tool_confirmation', $finished['outcome']['interrupts'][0]['reason']);
-        static::assertSame('call-9', $finished['outcome']['interrupts'][0]['toolCallId']);
+        $lastEventKey = array_key_last($events);
+        static::assertNotNull($lastEventKey);
+        $finished = $events[$lastEventKey];
+        $outcome = $finished['outcome'];
+        static::assertIsArray($outcome);
+        static::assertSame('interrupt', $outcome['type']);
+
+        $interrupts = $outcome['interrupts'];
+        static::assertIsArray($interrupts);
+        $interrupt = $interrupts[0];
+        static::assertIsArray($interrupt);
+        static::assertSame('tool_confirmation', $interrupt['reason']);
+        static::assertSame('call-9', $interrupt['toolCallId']);
         static::assertCount(0, $dispatcher->calls);
     }
 
+    /** @throws RuntimeException */
     public function testMidRunFailureSurfacesAsRunErrorOnTheOpenStream(): void
     {
         // No scripted runs: the LLM throws on the first pull, after the
@@ -192,6 +210,7 @@ final class ExampleRunnerTest extends TestCase
         static::assertSame('AGENT_ERROR', $events[1]['code']);
     }
 
+    /** @throws RuntimeException */
     public function testBrokenJsonIsRejectedBeforeAnyRun(): void
     {
         $llm = new FakeStreamingLlmClient();
@@ -208,6 +227,7 @@ final class ExampleRunnerTest extends TestCase
         static::assertSame(0, $llm->callCount);
     }
 
+    /** @throws RuntimeException */
     public function testEmptyUserContentIsRejectedBeforeAnyRun(): void
     {
         $llm = new FakeStreamingLlmClient();
@@ -266,15 +286,28 @@ final class ExampleRunnerTest extends TestCase
      */
     private static function decode(RecordingSink $sink): array
     {
-        return array_map(
-            static fn(string $frame): array => (array) json_decode(
-                substr($frame, 6, -2),
-                true,
-                512,
-                JSON_THROW_ON_ERROR,
-            ),
-            $sink->frames,
-        );
+        return array_map(self::decodeFrame(...), $sink->frames);
+    }
+
+    /**
+     * Decode a single SSE `data:` frame into its JSON-object payload,
+     * proving the string-keyed shape the fixtures always produce rather
+     * than trusting the blind `(array)` cast on `json_decode()`'s `mixed`.
+     *
+     * @return array<string, mixed>
+     */
+    private static function decodeFrame(string $frame): array
+    {
+        $decoded = json_decode(substr($frame, 6, -2), true, 512, JSON_THROW_ON_ERROR);
+        static::assertIsArray($decoded);
+
+        $payload = [];
+        foreach ($decoded as $key => $value) {
+            static::assertIsString($key);
+            $payload[$key] = $value;
+        }
+
+        return $payload;
     }
 
     /** @return list<string> */

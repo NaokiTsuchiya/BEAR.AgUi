@@ -55,7 +55,7 @@ if ($method !== 'POST' || $path !== '/invocations') {
     return;
 }
 
-$contentType = (string) ($_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? '');
+$contentType = $_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? '';
 $mediaType = strtolower(trim(explode(';', $contentType)[0]));
 if ($mediaType !== 'application/json') {
     respond_json(415, [

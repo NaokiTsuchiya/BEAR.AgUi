@@ -101,7 +101,11 @@ final class AgUiRunnerTest extends TestCase
 
         // The agent saw the seeded history followed by the new user turn.
         $messages = $captured[0];
+        static::assertNotNull($messages);
         static::assertCount(3, $messages);
+        static::assertNotNull($messages[0]);
+        static::assertNotNull($messages[1]);
+        static::assertNotNull($messages[2]);
         static::assertSame('user', $messages[0]->role);
         static::assertSame([['type' => 'text', 'text' => 'first question']], $messages[0]->content);
         static::assertSame('assistant', $messages[1]->role);
@@ -138,7 +142,9 @@ final class AgUiRunnerTest extends TestCase
         $types = self::types($sink);
         static::assertContains('TOOL_CALL_RESULT', $types);
         static::assertNotContains('RUN_ERROR', $types);
-        static::assertSame('RUN_FINISHED', $types[array_key_last($types)]);
+        $lastTypeKey = array_key_last($types);
+        static::assertNotNull($lastTypeKey);
+        static::assertSame('RUN_FINISHED', $types[$lastTypeKey]);
     }
 
     public function testConfirmationRequiredFinishesWithInterruptOutcome(): void
@@ -157,11 +163,21 @@ final class AgUiRunnerTest extends TestCase
         self::render(self::runner($llm, $dispatcher, [self::confirmableTool('writer')]), $input, $sink);
 
         $events = self::decode($sink);
-        $finished = $events[array_key_last($events)];
+        $lastEventKey = array_key_last($events);
+        static::assertNotNull($lastEventKey);
+        $finished = $events[$lastEventKey];
         static::assertSame('RUN_FINISHED', $finished['type']);
-        static::assertSame('interrupt', $finished['outcome']['type']);
-        static::assertSame('tool_confirmation', $finished['outcome']['interrupts'][0]['reason']);
-        static::assertSame('call-1', $finished['outcome']['interrupts'][0]['toolCallId']);
+
+        $outcome = $finished['outcome'];
+        static::assertIsArray($outcome);
+        static::assertSame('interrupt', $outcome['type']);
+
+        $interrupts = $outcome['interrupts'];
+        static::assertIsArray($interrupts);
+        $interrupt = $interrupts[0];
+        static::assertIsArray($interrupt);
+        static::assertSame('tool_confirmation', $interrupt['reason']);
+        static::assertSame('call-1', $interrupt['toolCallId']);
         static::assertCount(0, $dispatcher->calls);
     }
 
@@ -174,7 +190,10 @@ final class AgUiRunnerTest extends TestCase
 
         self::render(self::runner(new FakeStreamingLlmClient(), new FakeDispatcher(), []), self::input('hi'), $sink);
 
-        static::assertSame('RUN_ERROR', self::types($sink)[array_key_last(self::types($sink))]);
+        $types = self::types($sink);
+        $lastTypeKey = array_key_last($types);
+        static::assertNotNull($lastTypeKey);
+        static::assertSame('RUN_ERROR', $types[$lastTypeKey]);
     }
 
     /** @param list<SchemaTool> $tools */
@@ -206,6 +225,10 @@ final class AgUiRunnerTest extends TestCase
         array $history = [],
         array $declaredToolNames = [],
     ): RunAgentInput {
+        if ($userMessage === '') {
+            self::fail('userMessage must not be empty');
+        }
+
         return new RunAgentInput('t', 'r', $userMessage, $history, $declaredToolNames, [], null, [], []);
     }
 
@@ -224,15 +247,18 @@ final class AgUiRunnerTest extends TestCase
      */
     private static function decode(RecordingSink $sink): array
     {
-        return array_map(
-            static fn(string $frame): array => (array) json_decode(
-                substr($frame, 6, -2),
-                true,
-                512,
-                JSON_THROW_ON_ERROR,
-            ),
-            $sink->frames,
-        );
+        return array_map(static function (string $frame): array {
+            $decoded = json_decode(substr($frame, 6, -2), true, 512, JSON_THROW_ON_ERROR);
+            self::assertIsArray($decoded);
+
+            $event = [];
+            foreach ($decoded as $key => $value) {
+                self::assertIsString($key);
+                $event[$key] = $value;
+            }
+
+            return $event;
+        }, $sink->frames);
     }
 
     /** @return list<string> */

@@ -157,7 +157,13 @@ final class ConversationLogTest extends TestCase
 
         $messages = $log->toMessages();
 
-        static::assertSame('{}', $messages[1]['toolCalls'][0]['function']['arguments']);
+        $toolCalls = $messages[1]['toolCalls'];
+        static::assertIsArray($toolCalls);
+        $toolCall = $toolCalls[0];
+        static::assertIsArray($toolCall);
+        $function = $toolCall['function'];
+        static::assertIsArray($function);
+        static::assertSame('{}', $function['arguments']);
     }
 
     public function testInterruptedRunClosesDanglingToolCallArguments(): void
@@ -172,7 +178,13 @@ final class ConversationLogTest extends TestCase
 
         $messages = $log->toMessages();
 
-        static::assertSame('{}', $messages[1]['toolCalls'][0]['function']['arguments']);
+        $toolCalls = $messages[1]['toolCalls'];
+        static::assertIsArray($toolCalls);
+        $toolCall = $toolCalls[0];
+        static::assertIsArray($toolCall);
+        $function = $toolCall['function'];
+        static::assertIsArray($function);
+        static::assertSame('{}', $function['arguments']);
     }
 
     public function testEventsWithUnknownTypeAreIgnored(): void

@@ -64,9 +64,7 @@ final readonly class ParallelToolDispatch
                     $toolCall->input,
                     $currentText,
                 );
-                $results[$index] = $approved === true
-                    ? $this->dispatch($toolCall)
-                    : ToolResult::cancelled($toolCall->id);
+                $results[$index] = $approved ? $this->dispatch($toolCall) : ToolResult::cancelled($toolCall->id);
                 continue;
             }
 
@@ -114,8 +112,10 @@ final readonly class ParallelToolDispatch
 
     private function toToolCall(PendingToolCall $pending): ToolCall
     {
+        $decoded = json_decode($pending->inputJson, true);
+
         /** @var array<string, mixed> $input */
-        $input = (array) json_decode($pending->inputJson, true);
+        $input = is_array($decoded) ? $decoded : [];
 
         return new ToolCall(id: $pending->id, name: $pending->name, input: $input);
     }

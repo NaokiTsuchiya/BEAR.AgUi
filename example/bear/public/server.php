@@ -44,7 +44,7 @@ use Swoole\Runtime;
 require dirname(__DIR__, 3) . '/vendor/autoload.php';
 
 $hostEnv = getenv('AGUI_HOST');
-$host = (string) ($hostEnv !== false && $hostEnv !== '' ? $hostEnv : '127.0.0.1');
+$host = $hostEnv !== false && $hostEnv !== '' ? $hostEnv : '127.0.0.1';
 
 $portEnv = getenv('AGUI_PORT');
 $port = (int) ($portEnv !== false && $portEnv !== '' ? $portEnv : 8080);

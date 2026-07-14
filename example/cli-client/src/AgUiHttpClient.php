@@ -59,6 +59,11 @@ final class AgUiHttpClient
      *
      * @mago-expect analysis:no-value
      *
+     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+     *
+     * The CurlHandle parameter on the CURLOPT_HEADERFUNCTION / CURLOPT_WRITEFUNCTION
+     * closures below is required by curl's callback signature but never read.
+     *
      * curl_exec() drives CURLOPT_HEADERFUNCTION / CURLOPT_WRITEFUNCTION as
      * side effects that mutate $isJsonResponse / $rawJsonBody by
      * reference; mago's static flow analysis does not model mutation
@@ -82,7 +87,7 @@ final class AgUiHttpClient
             CURLOPT_POST => true,
             CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Accept: text/event-stream'],
             CURLOPT_POSTFIELDS => json_encode($body, JSON_THROW_ON_ERROR),
-            CURLOPT_HEADERFUNCTION => static function (CurlHandle $handle, string $headerLine) use (
+            CURLOPT_HEADERFUNCTION => static function (CurlHandle $_handle, string $headerLine) use (
                 &$isJsonResponse,
             ): int {
                 if (stripos($headerLine, 'content-type:') === 0) {
@@ -92,7 +97,7 @@ final class AgUiHttpClient
 
                 return strlen($headerLine);
             },
-            CURLOPT_WRITEFUNCTION => static function (CurlHandle $handle, string $chunk) use (
+            CURLOPT_WRITEFUNCTION => static function (CurlHandle $_handle, string $chunk) use (
                 $reader,
                 $onEvent,
                 &$isJsonResponse,

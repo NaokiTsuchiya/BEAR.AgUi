@@ -40,6 +40,7 @@ final class ToolResourcesTest extends TestCase
         $ro = $resource->get('app://self/weather', ['city' => 'Tokyo']);
 
         static::assertSame(200, $ro->code);
+        static::assertIsArray($ro->body);
         static::assertSame('Tokyo', $ro->body['city']);
         static::assertSame('sunny', $ro->body['condition']);
     }
@@ -51,6 +52,7 @@ final class ToolResourcesTest extends TestCase
         $ro = $resource->get('app://self/news', ['topic' => 'php']);
 
         static::assertSame(200, $ro->code);
+        static::assertIsArray($ro->body);
         static::assertSame('php', $ro->body['topic']);
         static::assertNotSame('', $ro->body['headline']);
     }
@@ -62,6 +64,7 @@ final class ToolResourcesTest extends TestCase
         $ro = $resource->post('app://self/message', ['to' => 'alice@example.com', 'body' => 'hi']);
 
         static::assertSame(201, $ro->code);
+        static::assertIsArray($ro->body);
         static::assertTrue($ro->body['sent']);
         static::assertSame('alice@example.com', $ro->body['to']);
     }
@@ -73,6 +76,7 @@ final class ToolResourcesTest extends TestCase
         $ro = $resource->put('app://self/reminder', ['id' => 'r-1', 'text' => 'buy milk']);
 
         static::assertSame(200, $ro->code);
+        static::assertIsArray($ro->body);
         static::assertTrue($ro->body['saved']);
         static::assertSame('r-1', $ro->body['id']);
     }

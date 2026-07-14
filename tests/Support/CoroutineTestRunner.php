@@ -17,7 +17,11 @@ use function Swoole\Coroutine\run;
  */
 final class CoroutineTestRunner
 {
-    /** @param callable(): void $test */
+    /**
+     * @param callable(): void $test
+     *
+     * @throws Throwable
+     */
     public static function run(callable $test): void
     {
         $error = null;

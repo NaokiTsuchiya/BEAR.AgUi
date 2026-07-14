@@ -26,10 +26,14 @@ final class MessageHistoryMapperTest extends TestCase
         ]);
 
         static::assertCount(2, $history);
-        static::assertSame('user', $history[0]->role);
-        static::assertSame([['type' => 'text', 'text' => 'hi']], $history[0]->content);
-        static::assertSame('assistant', $history[1]->role);
-        static::assertSame([['type' => 'text', 'text' => 'hello']], $history[1]->content);
+        $userMessage = $history[0];
+        $assistantMessage = $history[1];
+        static::assertNotNull($userMessage);
+        static::assertNotNull($assistantMessage);
+        static::assertSame('user', $userMessage->role);
+        static::assertSame([['type' => 'text', 'text' => 'hi']], $userMessage->content);
+        static::assertSame('assistant', $assistantMessage->role);
+        static::assertSame([['type' => 'text', 'text' => 'hello']], $assistantMessage->content);
     }
 
     public function testAssistantToolCallProducesToolUseBlock(): void
@@ -42,15 +46,18 @@ final class MessageHistoryMapperTest extends TestCase
         ]);
 
         static::assertCount(2, $history);
+        $assistantMessage = $history[0];
+        static::assertNotNull($assistantMessage);
         static::assertSame(
             [
                 ['type' => 'text', 'text' => 'looking that up'],
                 ['type' => 'tool_use', 'id' => 'call-1', 'name' => 'search', 'input' => ['q' => 'phpunit']],
             ],
-            $history[0]->content,
+            $assistantMessage->content,
         );
 
         $resultMessage = $history[1];
+        static::assertNotNull($resultMessage);
         static::assertSame('user', $resultMessage->role);
         static::assertSame(
             [
@@ -77,9 +84,11 @@ final class MessageHistoryMapperTest extends TestCase
         ]);
 
         static::assertCount(2, $history);
-        static::assertCount(2, $history[1]->content);
-        static::assertSame('call-a', $history[1]->content[0]['tool_use_id']);
-        static::assertSame('call-b', $history[1]->content[1]['tool_use_id']);
+        $toolResultsMessage = $history[1];
+        static::assertNotNull($toolResultsMessage);
+        static::assertCount(2, $toolResultsMessage->content);
+        static::assertSame('call-a', $toolResultsMessage->content[0]['tool_use_id']);
+        static::assertSame('call-b', $toolResultsMessage->content[1]['tool_use_id']);
     }
 
     public function testToolFailureMapsToErrorResult(): void
@@ -89,7 +98,9 @@ final class MessageHistoryMapperTest extends TestCase
             new ToolMessage('m2', 'call-1', ToolOutcome::failure(null, 'boom')),
         ]);
 
-        $result = $history[1]->content[0];
+        $toolResultsMessage = $history[1];
+        static::assertNotNull($toolResultsMessage);
+        $result = $toolResultsMessage->content[0];
         static::assertTrue($result['is_error']);
         static::assertSame('boom', $result['content']);
     }
@@ -104,7 +115,9 @@ final class MessageHistoryMapperTest extends TestCase
         ]);
 
         static::assertCount(1, $history);
-        static::assertSame('user', $history[0]->role);
+        $userMessage = $history[0];
+        static::assertNotNull($userMessage);
+        static::assertSame('user', $userMessage->role);
     }
 
     public function testEmptyInputReturnsEmptyHistory(): void

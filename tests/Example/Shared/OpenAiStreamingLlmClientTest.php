@@ -15,6 +15,7 @@ use Example\StubLlm\CannedConversation;
 use NaokiTsuchiya\BEARAgUi\Support\OpenAiClientBuilder;
 use NaokiTsuchiya\BEARAgUi\Support\StubHttpClient;
 use PHPUnit\Framework\TestCase;
+use Psr\Http\Message\RequestInterface;
 use RuntimeException;
 use stdClass;
 
@@ -46,6 +47,7 @@ final class OpenAiStreamingLlmClientTest extends TestCase
 {
     private const CREATED = 1_751_900_000;
 
+    /** @throws RuntimeException */
     public function testCannedToolCallTurnStreamsTextThenToolUse(): void
     {
         $http = self::cannedHttp();
@@ -72,6 +74,7 @@ final class OpenAiStreamingLlmClientTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testCannedToolResultTurnEchoesToolContentAndEndsTurn(): void
     {
         $http = self::cannedHttp();
@@ -97,13 +100,18 @@ final class OpenAiStreamingLlmClientTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testSendsMappedModelMessagesAndToolsInRequestBody(): void
     {
         $http = self::cannedHttp();
 
         self::stream($http, 'You are helpful.', [Message::user('What time is it?')], [self::getTimeTool()]);
 
-        $sent = json_decode((string) $http->requests[0]->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        $request = $http->requests[0] ?? null;
+        static::assertInstanceOf(RequestInterface::class, $request);
+
+        $sent = json_decode((string) $request->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        static::assertIsArray($sent);
         static::assertSame('stub-model', $sent['model']);
         static::assertTrue($sent['stream']);
         static::assertSame(
@@ -132,6 +140,7 @@ final class OpenAiStreamingLlmClientTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testTextOnlyStreamStopsWithEndTurn(): void
     {
         $http = self::scriptedHttp([
@@ -154,6 +163,7 @@ final class OpenAiStreamingLlmClientTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testSingleToolWithSplitArgumentsStreamsOneToolBlock(): void
     {
         $http = self::scriptedHttp([
@@ -178,6 +188,7 @@ final class OpenAiStreamingLlmClientTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testTextToToolBoundaryClosesTextBlock(): void
     {
         $http = self::scriptedHttp([
@@ -202,6 +213,7 @@ final class OpenAiStreamingLlmClientTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testToolToTextBoundaryClosesToolBlock(): void
     {
         $http = self::scriptedHttp([
@@ -226,6 +238,7 @@ final class OpenAiStreamingLlmClientTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testToolToToolBoundaryClosesFirstToolBlock(): void
     {
         $http = self::scriptedHttp([
@@ -288,6 +301,7 @@ final class OpenAiStreamingLlmClientTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testFinishReasonVariantsMapToStopReason(): void
     {
         $mapping = [
@@ -305,7 +319,10 @@ final class OpenAiStreamingLlmClientTest extends TestCase
             ]);
 
             $events = self::stream($http, '', [Message::user('hi')], []);
-            $last = $events[array_key_last($events)];
+            $lastKey = array_key_last($events);
+            static::assertNotNull($lastKey);
+            $last = $events[$lastKey];
+            static::assertNotNull($last);
 
             static::assertSame(StreamEvent::MESSAGE_STOP, $last->type, "finish_reason={$finishReason}");
             static::assertSame(['stopReason' => $stopReason], $last->data, "finish_reason={$finishReason}");
@@ -317,6 +334,8 @@ final class OpenAiStreamingLlmClientTest extends TestCase
      * @param list<Tool>    $tools
      *
      * @return list<StreamEvent>
+     *
+     * @throws RuntimeException
      */
     private static function stream(StubHttpClient $http, string $system, array $messages, array $tools): array
     {
@@ -350,7 +369,7 @@ final class OpenAiStreamingLlmClientTest extends TestCase
     /** @param list<array<string, mixed>> $chunks */
     private static function scriptedHttp(array $chunks): StubHttpClient
     {
-        return new StubHttpClient(static fn(array $requestBody): iterable => $chunks);
+        return new StubHttpClient(static fn(array $_requestBody): iterable => $chunks);
     }
 
     /**

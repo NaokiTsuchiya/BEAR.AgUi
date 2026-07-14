@@ -15,6 +15,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Throwable;
 
 use function array_map;
 use function iterator_to_array;
@@ -25,6 +26,7 @@ final class ParallelStreamingAgentTest extends TestCase
 {
     use ParallelAgentScenarioFixture;
 
+    /** @throws Throwable */
     public function testPlainToolsRunConcurrentlyAndKeepEventOrder(): void
     {
         CoroutineTestRunner::run(function (): void {
@@ -67,14 +69,22 @@ final class ParallelStreamingAgentTest extends TestCase
 
             // tool_result events come in pending (wire) order even though
             // completion order under the scheduler is arbitrary.
+            $toolResultEvent4 = $events[4];
+            $toolResultEvent5 = $events[5];
+            $toolResultEvent6 = $events[6];
+            self::assertNotNull($toolResultEvent4);
+            self::assertNotNull($toolResultEvent5);
+            self::assertNotNull($toolResultEvent6);
             static::assertSame(['alpha', 'beta', 'gamma'], [
-                $events[4]->data['toolName'],
-                $events[5]->data['toolName'],
-                $events[6]->data['toolName'],
+                $toolResultEvent4->data['toolName'],
+                $toolResultEvent5->data['toolName'],
+                $toolResultEvent6->data['toolName'],
             ]);
 
             // Tool results are fed back to the LLM in pending order.
-            $toolResults = $agent->messages[2]->content;
+            $resultMessage = $agent->messages[2];
+            self::assertNotNull($resultMessage);
+            $toolResults = $resultMessage->content;
             static::assertSame(
                 ['call-a', 'call-b', 'call-c'],
                 array_map(static fn(array $block): mixed => $block['tool_use_id'], $toolResults),
@@ -82,6 +92,7 @@ final class ParallelStreamingAgentTest extends TestCase
         });
     }
 
+    /** @throws Throwable */
     public function testEventSequenceMatchesSequentialAgentWithoutConfirmations(): void
     {
         CoroutineTestRunner::run(function (): void {
@@ -112,6 +123,7 @@ final class ParallelStreamingAgentTest extends TestCase
         });
     }
 
+    /** @throws Throwable */
     public function testDeniedConfirmationCancelsWithoutDispatch(): void
     {
         CoroutineTestRunner::run(function (): void {
@@ -136,13 +148,16 @@ final class ParallelStreamingAgentTest extends TestCase
             // Denied tool is never dispatched; the plain one still runs.
             static::assertSame(['alpha'], $probe->dispatchedNames);
 
-            $toolResults = $agent->messages[2]->content;
+            $resultMessage = $agent->messages[2];
+            self::assertNotNull($resultMessage);
+            $toolResults = $resultMessage->content;
             static::assertFalse($toolResults[0]['is_error']);
             static::assertTrue($toolResults[1]['is_error']);
             static::assertSame('User cancelled this operation.', $toolResults[1]['content']);
         });
     }
 
+    /** @throws Throwable */
     public function testApprovedConfirmableRunsSeriallyBeforeParallelWave(): void
     {
         CoroutineTestRunner::run(function (): void {
@@ -171,7 +186,9 @@ final class ParallelStreamingAgentTest extends TestCase
             // Results and result events stay in pending order.
             static::assertSame(['alpha', 'danger'], $this->toolResultNames($events));
 
-            $toolResults = $agent->messages[2]->content;
+            $resultMessage = $agent->messages[2];
+            self::assertNotNull($resultMessage);
+            $toolResults = $resultMessage->content;
             static::assertSame(
                 ['call-a', 'call-d'],
                 array_map(static fn(array $block): mixed => $block['tool_use_id'], $toolResults),
@@ -179,6 +196,7 @@ final class ParallelStreamingAgentTest extends TestCase
         });
     }
 
+    /** @throws Throwable */
     public function testUnknownToolErrorsWithoutDispatchAndKeepsOrder(): void
     {
         CoroutineTestRunner::run(function (): void {
@@ -198,13 +216,16 @@ final class ParallelStreamingAgentTest extends TestCase
 
             static::assertSame(['ghost', 'alpha'], $this->toolResultNames($events));
 
-            $toolResults = $agent->messages[2]->content;
+            $resultMessage = $agent->messages[2];
+            self::assertNotNull($resultMessage);
+            $toolResults = $resultMessage->content;
             static::assertTrue($toolResults[0]['is_error']);
             static::assertSame('Tool is not enabled: ghost', $toolResults[0]['content']);
             static::assertFalse($toolResults[1]['is_error']);
         });
     }
 
+    /** @throws Throwable */
     public function testThrowingDispatcherBecomesErrorResult(): void
     {
         CoroutineTestRunner::run(function (): void {
@@ -219,12 +240,15 @@ final class ParallelStreamingAgentTest extends TestCase
 
             iterator_to_array($agent->runStream('go'), false);
 
-            $toolResults = $agent->messages[2]->content;
+            $resultMessage = $agent->messages[2];
+            self::assertNotNull($resultMessage);
+            $toolResults = $resultMessage->content;
             static::assertTrue($toolResults[0]['is_error']);
             static::assertSame('RuntimeException: boom', $toolResults[0]['content']);
         });
     }
 
+    /** @throws Throwable */
     public function testResetClearsConversation(): void
     {
         CoroutineTestRunner::run(function (): void {

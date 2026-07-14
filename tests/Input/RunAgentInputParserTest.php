@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace NaokiTsuchiya\BEARAgUi\Input;
 
+use NaokiTsuchiya\BEARAgUi\Input\Message\Message;
 use NaokiTsuchiya\BEARAgUi\Support\JsonFixture;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 use function array_map;
 
@@ -20,6 +22,7 @@ use function array_map;
 #[CoversClass(Result::class)]
 final class RunAgentInputParserTest extends TestCase
 {
+    /** @throws RuntimeException */
     public function testParsesMinimalValidBody(): void
     {
         $input = self::parseOk('Input/minimal.json');
@@ -33,21 +36,27 @@ final class RunAgentInputParserTest extends TestCase
         static::assertNull($input->state);
     }
 
+    /** @throws RuntimeException */
     public function testAcceptsOptionalFields(): void
     {
         $input = self::parseOk('Input/full.json');
 
         static::assertSame(['search'], $input->declaredToolNames);
-        static::assertSame('d', $input->context[0]->description);
-        static::assertSame('v', $input->context[0]->value);
+        $context = $input->context[0];
+        static::assertInstanceOf(Context::class, $context);
+        static::assertSame('d', $context->description);
+        static::assertSame('v', $context->value);
         static::assertSame(['k' => 'v'], $input->state);
         static::assertSame(['a' => 1], $input->forwardedProps);
         static::assertCount(1, $input->resume);
-        static::assertSame('i-1', $input->resume[0]->interruptId);
-        static::assertSame('resolved', $input->resume[0]->status);
-        static::assertNull($input->resume[0]->payload);
+        $resume = $input->resume[0];
+        static::assertInstanceOf(Resume::class, $resume);
+        static::assertSame('i-1', $resume->interruptId);
+        static::assertSame('resolved', $resume->status);
+        static::assertNull($resume->payload);
     }
 
+    /** @throws RuntimeException */
     public function testSplitsTriggerFromHistory(): void
     {
         $input = self::parseOk('Input/history-before-trigger.json');
@@ -55,7 +64,7 @@ final class RunAgentInputParserTest extends TestCase
         static::assertSame('second', $input->userMessage);
         static::assertSame(
             ['user', 'assistant'],
-            array_map(static fn($message): string => $message->role(), $input->history),
+            array_map(static fn(Message $message): string => $message->role(), $input->history),
         );
     }
 
@@ -64,7 +73,9 @@ final class RunAgentInputParserTest extends TestCase
         $result = (new RunAgentInputParser())->parse('"not an object"');
 
         static::assertFalse($result->isOk());
-        static::assertStringContainsString('must be a JSON object', $result->unwrapErr()[0]->message);
+        $error = $result->unwrapErr()[0];
+        static::assertInstanceOf(ParseError::class, $error);
+        static::assertStringContainsString('must be a JSON object', $error->message);
     }
 
     public function testReturnsParseErrorForInvalidJson(): void
@@ -72,9 +83,12 @@ final class RunAgentInputParserTest extends TestCase
         $result = (new RunAgentInputParser())->parse('{not json');
 
         static::assertFalse($result->isOk());
-        static::assertStringStartsWith('Invalid JSON', $result->unwrapErr()[0]->message);
+        $error = $result->unwrapErr()[0];
+        static::assertInstanceOf(ParseError::class, $error);
+        static::assertStringStartsWith('Invalid JSON', $error->message);
     }
 
+    /** @throws RuntimeException */
     public function testReturnsParseErrorForMissingThreadId(): void
     {
         static::assertStringContainsString(
@@ -83,6 +97,7 @@ final class RunAgentInputParserTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testReturnsParseErrorForEmptyRunId(): void
     {
         static::assertStringContainsString(
@@ -91,6 +106,7 @@ final class RunAgentInputParserTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testReturnsParseErrorForMissingMessages(): void
     {
         static::assertStringContainsString(
@@ -99,6 +115,7 @@ final class RunAgentInputParserTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testReturnsParseErrorForUnknownMessageRole(): void
     {
         static::assertSame(
@@ -107,16 +124,19 @@ final class RunAgentInputParserTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testReturnsParseErrorForMessageMissingId(): void
     {
         static::assertSame('messages[0].id is required', self::firstError('Input/message-missing-id.json')->message);
     }
 
+    /** @throws RuntimeException */
     public function testReturnsParseErrorForToolMissingName(): void
     {
         static::assertSame('tools[1].name is required', self::firstError('Input/tools-missing-name.json')->message);
     }
 
+    /** @throws RuntimeException */
     public function testReturnsParseErrorForToolMessageMissingToolCallId(): void
     {
         static::assertSame(
@@ -125,6 +145,7 @@ final class RunAgentInputParserTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testReturnsParseErrorWhenTriggerUserMessageIsEmpty(): void
     {
         static::assertStringContainsString(
@@ -133,6 +154,7 @@ final class RunAgentInputParserTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testReturnsParseErrorWhenNoUserMessagePresent(): void
     {
         static::assertStringContainsString(
@@ -141,6 +163,7 @@ final class RunAgentInputParserTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testReturnsParseErrorForAssistantToolCallInvalidJsonArguments(): void
     {
         static::assertStringStartsWith(
@@ -149,6 +172,7 @@ final class RunAgentInputParserTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testReturnsParseErrorForAssistantToolCallNonObjectArguments(): void
     {
         static::assertSame(
@@ -157,6 +181,7 @@ final class RunAgentInputParserTest extends TestCase
         );
     }
 
+    /** @throws RuntimeException */
     public function testProjectsUserMessageInputContentArrayToText(): void
     {
         $input = self::parseOk('Input/user-message-with-input-content.json');
@@ -164,6 +189,7 @@ final class RunAgentInputParserTest extends TestCase
         static::assertSame('describe this', $input->userMessage);
     }
 
+    /** @throws RuntimeException */
     public function testAggregatesErrorsAcrossIndependentSiblings(): void
     {
         $messages = self::errorMessages('Input/multiple-errors.json');
@@ -174,6 +200,7 @@ final class RunAgentInputParserTest extends TestCase
         static::assertCount(3, $messages);
     }
 
+    /** @throws RuntimeException */
     public function testAggregatesErrorsAcrossListEntries(): void
     {
         $messages = self::errorMessages('Input/multiple-message-errors.json');
@@ -183,6 +210,7 @@ final class RunAgentInputParserTest extends TestCase
         static::assertCount(2, $messages);
     }
 
+    /** @throws RuntimeException */
     public function testAggregatesMultipleErrorsWithinOneEntry(): void
     {
         $messages = self::errorMessages('Input/activity-missing-type-and-content.json');
@@ -192,6 +220,7 @@ final class RunAgentInputParserTest extends TestCase
         static::assertCount(2, $messages);
     }
 
+    /** @throws RuntimeException */
     public function testAggregatesToolFieldErrors(): void
     {
         $messages = self::errorMessages('Input/tool-missing-name-and-parameters.json');
@@ -201,6 +230,7 @@ final class RunAgentInputParserTest extends TestCase
         static::assertCount(2, $messages);
     }
 
+    /** @throws RuntimeException */
     public function testAggregatesContextFieldErrors(): void
     {
         $messages = self::errorMessages('Input/context-missing-both.json');
@@ -210,6 +240,7 @@ final class RunAgentInputParserTest extends TestCase
         static::assertCount(2, $messages);
     }
 
+    /** @throws RuntimeException */
     public function testAggregatesResumeFieldErrors(): void
     {
         $messages = self::errorMessages('Input/resume-missing-both.json');
@@ -219,6 +250,7 @@ final class RunAgentInputParserTest extends TestCase
         static::assertCount(2, $messages);
     }
 
+    /** @throws RuntimeException */
     public function testAggregatesToolMessageFieldErrors(): void
     {
         $messages = self::errorMessages('Input/tool-message-missing-both.json');
@@ -228,6 +260,7 @@ final class RunAgentInputParserTest extends TestCase
         static::assertCount(2, $messages);
     }
 
+    /** @throws RuntimeException */
     public function testAggregatesAssistantToolCallFieldErrors(): void
     {
         $messages = self::errorMessages('Input/assistant-tool-call-missing-id-and-name.json');
@@ -237,6 +270,7 @@ final class RunAgentInputParserTest extends TestCase
         static::assertCount(2, $messages);
     }
 
+    /** @throws RuntimeException */
     private static function parseOk(string $fixture): RunAgentInput
     {
         $result = (new RunAgentInputParser())->parse(JsonFixture::load($fixture));
@@ -245,7 +279,11 @@ final class RunAgentInputParserTest extends TestCase
         return $result->unwrap();
     }
 
-    /** @return list<ParseError> */
+    /**
+     * @return list<ParseError>
+     *
+     * @throws RuntimeException
+     */
     private static function errors(string $fixture): array
     {
         $result = (new RunAgentInputParser())->parse(JsonFixture::load($fixture));
@@ -257,12 +295,20 @@ final class RunAgentInputParserTest extends TestCase
         return $errors;
     }
 
+    /** @throws RuntimeException */
     private static function firstError(string $fixture): ParseError
     {
-        return self::errors($fixture)[0];
+        $error = self::errors($fixture)[0];
+        static::assertInstanceOf(ParseError::class, $error);
+
+        return $error;
     }
 
-    /** @return list<string> */
+    /**
+     * @return list<string>
+     *
+     * @throws RuntimeException
+     */
     private static function errorMessages(string $fixture): array
     {
         return array_map(static fn(ParseError $error): string => $error->message, self::errors($fixture));

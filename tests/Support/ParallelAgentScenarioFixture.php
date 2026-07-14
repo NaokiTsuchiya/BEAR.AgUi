@@ -8,6 +8,7 @@ use BEAR\ToolUse\Llm\StreamEvent;
 use BEAR\ToolUse\Runtime\AgentEvent;
 use BEAR\ToolUse\Schema\Tool;
 use Generator;
+use PHPUnit\Framework\Assert;
 
 use function array_map;
 use function array_values;
@@ -19,6 +20,8 @@ use const JSON_THROW_ON_ERROR;
  * Scenario builders and generator-driving helpers shared by the parallel
  * agent tests: scripted LLM turns, Tool definitions, and consumption with
  * confirmation answers.
+ *
+ * @internal
  */
 trait ParallelAgentScenarioFixture
 {
@@ -35,6 +38,7 @@ trait ParallelAgentScenarioFixture
         $events = [];
         while ($stream->valid()) {
             $event = $stream->current();
+            Assert::assertInstanceOf(AgentEvent::class, $event);
             $events[] = $event;
             if ($event->type === AgentEvent::CONFIRMATION_REQUIRED) {
                 $stream->send($approval);

@@ -39,8 +39,8 @@ final class StreamingAgentFactoryTest extends TestCase
     public function testKnownToolNamesReturnsRegisteredToolNames(): void
     {
         $factory = self::makeFactory([
-            new Tool('search', 'd', []),
-            new Tool('fetch', 'd', []),
+            new Tool('search', 'd', ['type' => 'object', 'properties' => []]),
+            new Tool('fetch', 'd', ['type' => 'object', 'properties' => []]),
         ]);
 
         static::assertSame(['search', 'fetch'], $factory->knownToolNames());
