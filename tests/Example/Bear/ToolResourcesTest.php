@@ -28,6 +28,8 @@ use function json_encode;
 use function mkdir;
 use function sys_get_temp_dir;
 
+use const JSON_THROW_ON_ERROR;
+
 /**
  * The #[Tool] resources through a real Injector (tasks-m3 T3): resource
  * behavior via ResourceInterface, and the tool declarations / registry
@@ -93,7 +95,8 @@ final class ToolResourcesTest extends TestCase
         $ro = $resource->get('app://self/package', ['query' => 'bear/tool-use']);
 
         static::assertSame(200, $ro->code);
-        static::assertTrue($ro->body['found']);
+        static::assertIsArray($ro->body);
+        static::assertTrue($ro->body['found'] ?? null);
         static::assertSame('bear/tool-use', $ro->body['name']);
         static::assertSame(12_345, $ro->body['downloads']);
     }
@@ -105,10 +108,11 @@ final class ToolResourcesTest extends TestCase
         $ro = $resource->get('app://self/similarity', ['a' => 'PHP', 'b' => 'Perl']);
 
         static::assertSame(200, $ro->code);
-        static::assertSame('PHP', $ro->body['a']);
-        static::assertSame('Perl', $ro->body['b']);
-        static::assertIsFloat($ro->body['similarity_percent']);
-        static::assertIsInt($ro->body['levenshtein_distance']);
+        static::assertIsArray($ro->body);
+        static::assertSame('PHP', $ro->body['a'] ?? null);
+        static::assertSame('Perl', $ro->body['b'] ?? null);
+        static::assertIsFloat($ro->body['similarity_percent'] ?? null);
+        static::assertIsInt($ro->body['levenshtein_distance'] ?? null);
     }
 
     public function testRot13EncodesAndRoundTrips(): void
@@ -118,10 +122,12 @@ final class ToolResourcesTest extends TestCase
         $ro = $resource->get('app://self/rot13', ['text' => 'BEAR.Sunday']);
 
         static::assertSame(200, $ro->code);
-        static::assertNotSame('BEAR.Sunday', $ro->body['output']);
+        static::assertIsArray($ro->body);
+        static::assertNotSame('BEAR.Sunday', $ro->body['output'] ?? null);
 
-        $roundTrip = $resource->get('app://self/rot13', ['text' => $ro->body['output']]);
-        static::assertSame('BEAR.Sunday', $roundTrip->body['output']);
+        $roundTrip = $resource->get('app://self/rot13', ['text' => $ro->body['output'] ?? null]);
+        static::assertIsArray($roundTrip->body);
+        static::assertSame('BEAR.Sunday', $roundTrip->body['output'] ?? null);
     }
 
     public function testCollectorDerivesToolDeclarationsAndFillsRegistry(): void
@@ -210,7 +216,11 @@ final class ToolResourcesTest extends TestCase
                                 ]],
                             ];
 
-                            return new Response(200, ['Content-Type' => 'application/json'], json_encode($payload));
+                            return new Response(
+                                200,
+                                ['Content-Type' => 'application/json'],
+                                json_encode($payload, JSON_THROW_ON_ERROR),
+                            );
                         }
                     };
                 }
