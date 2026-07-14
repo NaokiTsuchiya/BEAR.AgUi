@@ -156,7 +156,10 @@ final class InvocationsTest extends TestCase
         $request0 = $llm->requests[0];
         static::assertNotNull($request0);
         $offered = array_map(static fn(Tool $tool): string => $tool->name, $request0['tools']);
-        static::assertSame(['weather_get', 'news_get', 'reminder_put'], $offered);
+        static::assertSame(
+            ['weather_get', 'news_get', 'reminder_put', 'package_search', 'word_similarity_get', 'rot13_get'],
+            $offered,
+        );
 
         // The refused call is fed back to the model as an error tool_result
         // — the Message resource itself was never dispatched.

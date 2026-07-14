@@ -81,6 +81,20 @@
       font-size: 0.85rem;
     }
     .interrupt .note { margin-top: 0.3rem; font-size: 0.75rem; color: #8a6d1a; }
+    .bubble.pending { display: flex; align-items: center; gap: 0.25rem; padding: 0.6rem 0.9rem; }
+    .bubble.pending .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #9aa4af;
+      animation: pending-bounce 1.2s infinite ease-in-out;
+    }
+    .bubble.pending .dot:nth-child(2) { animation-delay: 0.15s; }
+    .bubble.pending .dot:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes pending-bounce {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
     .error {
       align-self: stretch;
       background: #fdecea;
@@ -411,31 +425,47 @@
      * (entries, event) => entries reducer so React state updates stay
      * immutable.
      */
+    // A run has visible gaps — after RUN_STARTED, and after a tool result —
+    // where the LLM is still thinking but no entry has arrived yet to show
+    // it. `pending` is a transient "..." bubble for exactly those gaps: any
+    // event that produces visible content strips it first, and the two
+    // gap-starting events (RUN_STARTED, TOOL_CALL_RESULT) re-add it.
+    function withoutPending(entries) {
+      return entries.filter((entry) => entry.kind !== 'pending');
+    }
+
     function applyEvent(entries, event) {
+      const settled = withoutPending(entries);
+
       switch (event.type) {
+        case 'RUN_STARTED':
+          return [...settled, { kind: 'pending' }];
         case 'TEXT_MESSAGE_START':
-          return [...entries, { kind: 'assistant', id: stringOrEmpty(event.messageId), text: '' }];
+          return [...settled, { kind: 'assistant', id: stringOrEmpty(event.messageId), text: '' }];
         case 'TEXT_MESSAGE_CONTENT':
-          return entries.map((entry) =>
+          return settled.map((entry) =>
             entry.kind === 'assistant' && entry.id === event.messageId
               ? { ...entry, text: entry.text + stringOrEmpty(event.delta) }
               : entry);
         case 'TOOL_CALL_START':
-          return [...entries, {
+          return [...settled, {
             kind: 'tool',
             id: stringOrEmpty(event.toolCallId),
             name: stringOrEmpty(event.toolCallName),
             result: null,
           }];
         case 'TOOL_CALL_RESULT':
-          return entries.map((entry) =>
-            entry.kind === 'tool' && entry.id === event.toolCallId
-              ? { ...entry, result: stringOrEmpty(event.content) }
-              : entry);
+          return [
+            ...settled.map((entry) =>
+              entry.kind === 'tool' && entry.id === event.toolCallId
+                ? { ...entry, result: stringOrEmpty(event.content) }
+                : entry),
+            { kind: 'pending' },
+          ];
         case 'RUN_FINISHED': {
           const outcome = event.outcome;
           if (outcome === null || typeof outcome !== 'object' || outcome.type !== 'interrupt') {
-            return entries;
+            return settled;
           }
 
           const texts = (Array.isArray(outcome.interrupts) ? outcome.interrupts : [])
@@ -445,12 +475,12 @@
                 : '')
             .filter((text) => text !== '');
 
-          return [...entries, { kind: 'interrupt', texts }];
+          return [...settled, { kind: 'interrupt', texts }];
         }
         case 'RUN_ERROR':
-          return [...entries, { kind: 'error', text: stringOrEmpty(event.message) }];
+          return [...settled, { kind: 'error', text: stringOrEmpty(event.message) }];
         default:
-          return entries;
+          return settled;
       }
     }
 
@@ -459,7 +489,10 @@
         case 'user':
           return <div className="bubble user">{entry.text}</div>;
         case 'assistant':
-          return <div className="bubble assistant">{entry.text}</div>;
+          // Some models stream a whitespace-only chunk (e.g. a lone "\n")
+          // as filler right before a tool call; AG-UI-wise it's a valid
+          // TEXT_MESSAGE, but showing it as an empty bubble reads as broken.
+          return entry.text.trim() === '' ? null : <div className="bubble assistant">{entry.text}</div>;
         case 'tool':
           return (
             <div className="tool">
@@ -477,6 +510,12 @@
           );
         case 'error':
           return <div className="error">⚠ {entry.text}</div>;
+        case 'pending':
+          return (
+            <div className="bubble assistant pending">
+              <span className="dot"></span><span className="dot"></span><span className="dot"></span>
+            </div>
+          );
         default:
           return null;
       }

@@ -25,8 +25,15 @@ use Ray\Di\ProviderInterface;
  */
 final class AgentFactoryProvider implements ProviderInterface
 {
-    /** Minimal on purpose: enough to make a real model use the tools; the stub ignores it. */
-    private const SYSTEM_PROMPT = 'You are a helpful assistant. Use the provided tools when relevant.';
+    /**
+     * Tight on purpose for live-demo pacing: without this, some models pad
+     * a one-tool-call answer with an unprompted dump of every tool's ALPS
+     * semantics. The stub ignores this string entirely.
+     */
+    private const SYSTEM_PROMPT =
+        'You are a live conference demo assistant. Use the provided tools when relevant, '
+            . 'then report the result in one short sentence. Never explain tool schemas, list available tools, or '
+            . 'volunteer unrelated information unless explicitly asked.';
 
     public function __construct(
         private readonly StreamingLlmClientInterface $client,

@@ -225,7 +225,9 @@ permit = [
 # Swoole response handle its per-request responder carries. Library access
 # is opened per symbol / sub-namespace on purpose — the root prefix would
 # also admit the test namespaces (Fake\, Support\), which example/ must
-# never touch (tasks-m2 T8, tasks-m3 T11).
+# never touch (tasks-m2 T8, tasks-m3 T11). GuzzleHttp\/Psr\Http\Client\ were
+# added for package_search (Package.php): the first #[Tool] resource in
+# this app that round-trips a real third-party API instead of canned data.
 namespace = "Example\\Bear\\"
 permit = [
     "@native",
@@ -233,8 +235,10 @@ permit = [
     "Example\\Shared\\",
     "BEAR\\Resource\\",
     "BEAR\\ToolUse\\",
+    "GuzzleHttp\\",
     "OpenAI",
     "OpenAI\\",
+    "Psr\\Http\\Client\\",
     "Psr\\Log\\",
     "Ray\\Di\\",
     "Swoole\\Http\\Response",

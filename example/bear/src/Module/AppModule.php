@@ -8,7 +8,9 @@ use BEAR\Resource\Module\ResourceModule;
 use BEAR\ToolUse\Llm\StreamingLlmClientInterface;
 use BEAR\ToolUse\Module\ToolUseModule;
 use Example\Bear\Provider\LlmClientProvider;
+use GuzzleHttp\Client;
 use Override;
+use Psr\Http\Client\ClientInterface;
 use Ray\Di\AbstractModule;
 use Ray\Di\Scope;
 
@@ -37,5 +39,9 @@ final class AppModule extends AbstractModule
             ->toInstance(dirname(__DIR__, 2) . '/var/schema');
 
         $this->bind(StreamingLlmClientInterface::class)->toProvider(LlmClientProvider::class)->in(Scope::SINGLETON);
+
+        // Real (non-canned) HTTP for package_search (Package.php) — swapped
+        // for a fake in tests so they never touch the network (D22 pattern).
+        $this->bind(ClientInterface::class)->toInstance(new Client(['timeout' => 5.0]));
     }
 }

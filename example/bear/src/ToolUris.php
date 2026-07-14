@@ -17,6 +17,9 @@ final class ToolUris
         'app://self/news',
         'app://self/message',
         'app://self/reminder',
+        'app://self/package',
+        'app://self/similarity',
+        'app://self/rot13',
     ];
 
     /** Static holder only. */
