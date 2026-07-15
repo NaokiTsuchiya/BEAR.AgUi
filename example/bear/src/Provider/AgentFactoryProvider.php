@@ -12,6 +12,10 @@ use NaokiTsuchiya\BEARAgUi\Runtime\ParallelStreamingAgentFactory;
 use NaokiTsuchiya\BEARAgUi\ToolUse\InstrumentedAgentFactory;
 use Override;
 use Ray\Di\ProviderInterface;
+use RuntimeException;
+
+use function file_get_contents;
+use function trim;
 
 /**
  * Builds the app-single agent factory (tasks-m3 T4, D26/D29): collects the
@@ -26,14 +30,10 @@ use Ray\Di\ProviderInterface;
 final class AgentFactoryProvider implements ProviderInterface
 {
     /**
-     * Tight on purpose for live-demo pacing: without this, some models pad
-     * a one-tool-call answer with an unprompted dump of every tool's ALPS
-     * semantics. The stub ignores this string entirely.
+     * Kept on the filesystem (not a PHP const) so the demo script can be
+     * tuned between runs without touching code.
      */
-    private const SYSTEM_PROMPT =
-        'You are a live conference demo assistant. Use the provided tools when relevant, '
-            . 'then report the result in one short sentence. Never explain tool schemas, list available tools, or '
-            . 'volunteer unrelated information unless explicitly asked.';
+    private const SYSTEM_PROMPT_PATH = __DIR__ . '/../../prompts/system-prompt.txt';
 
     public function __construct(
         private readonly StreamingLlmClientInterface $client,
@@ -48,7 +48,17 @@ final class AgentFactoryProvider implements ProviderInterface
             $this->client,
             $this->dispatcher,
             $this->collector->collect(ToolUris::ALL),
-            self::SYSTEM_PROMPT,
+            $this->readSystemPrompt(),
         );
+    }
+
+    private function readSystemPrompt(): string
+    {
+        $contents = file_get_contents(self::SYSTEM_PROMPT_PATH);
+        if ($contents === false) {
+            throw new RuntimeException('Unable to read system prompt file: ' . self::SYSTEM_PROMPT_PATH);
+        }
+
+        return trim($contents);
     }
 }
