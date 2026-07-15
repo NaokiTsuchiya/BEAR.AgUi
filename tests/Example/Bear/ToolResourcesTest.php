@@ -48,8 +48,8 @@ final class ToolResourcesTest extends TestCase
 
         static::assertSame(200, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertSame('Tokyo', $ro->body['city'] ?? null);
-        static::assertSame('sunny', $ro->body['condition'] ?? null);
+        static::assertSame('Tokyo', self::field($ro->body, 'city'));
+        static::assertSame('sunny', self::field($ro->body, 'condition'));
     }
 
     public function testNewsReturnsHeadlineForTopic(): void
@@ -60,8 +60,8 @@ final class ToolResourcesTest extends TestCase
 
         static::assertSame(200, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertSame('php', $ro->body['topic'] ?? null);
-        static::assertNotSame('', $ro->body['headline'] ?? null);
+        static::assertSame('php', self::field($ro->body, 'topic'));
+        static::assertNotSame('', self::field($ro->body, 'headline'));
     }
 
     public function testMessagePostReportsSent(): void
@@ -72,8 +72,8 @@ final class ToolResourcesTest extends TestCase
 
         static::assertSame(201, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertTrue($ro->body['sent'] ?? false);
-        static::assertSame('alice@example.com', $ro->body['to'] ?? null);
+        static::assertTrue(self::field($ro->body, 'sent', false));
+        static::assertSame('alice@example.com', self::field($ro->body, 'to'));
     }
 
     public function testReminderPutUpserts(): void
@@ -84,8 +84,8 @@ final class ToolResourcesTest extends TestCase
 
         static::assertSame(200, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertTrue($ro->body['saved'] ?? false);
-        static::assertSame('r-1', $ro->body['id'] ?? null);
+        static::assertTrue(self::field($ro->body, 'saved', false));
+        static::assertSame('r-1', self::field($ro->body, 'id'));
     }
 
     public function testPackageSearchReturnsTopResultForQuery(): void
@@ -96,9 +96,9 @@ final class ToolResourcesTest extends TestCase
 
         static::assertSame(200, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertTrue($ro->body['found'] ?? null);
-        static::assertSame('bear/tool-use', $ro->body['name']);
-        static::assertSame(12_345, $ro->body['downloads']);
+        static::assertTrue(self::field($ro->body, 'found'));
+        static::assertSame('bear/tool-use', self::field($ro->body, 'name'));
+        static::assertSame(12_345, self::field($ro->body, 'downloads'));
     }
 
     public function testWordSimilarityComparesTwoPhrases(): void
@@ -109,10 +109,10 @@ final class ToolResourcesTest extends TestCase
 
         static::assertSame(200, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertSame('PHP', $ro->body['a'] ?? null);
-        static::assertSame('Perl', $ro->body['b'] ?? null);
-        static::assertIsFloat($ro->body['similarity_percent'] ?? null);
-        static::assertIsInt($ro->body['levenshtein_distance'] ?? null);
+        static::assertSame('PHP', self::field($ro->body, 'a'));
+        static::assertSame('Perl', self::field($ro->body, 'b'));
+        static::assertIsFloat(self::field($ro->body, 'similarity_percent'));
+        static::assertIsInt(self::field($ro->body, 'levenshtein_distance'));
     }
 
     public function testRot13EncodesAndRoundTrips(): void
@@ -123,11 +123,11 @@ final class ToolResourcesTest extends TestCase
 
         static::assertSame(200, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertNotSame('BEAR.Sunday', $ro->body['output'] ?? null);
+        static::assertNotSame('BEAR.Sunday', self::field($ro->body, 'output'));
 
-        $roundTrip = $resource->get('app://self/rot13', ['text' => $ro->body['output'] ?? null]);
+        $roundTrip = $resource->get('app://self/rot13', ['text' => self::field($ro->body, 'output')]);
         static::assertIsArray($roundTrip->body);
-        static::assertSame('BEAR.Sunday', $roundTrip->body['output'] ?? null);
+        static::assertSame('BEAR.Sunday', self::field($roundTrip->body, 'output'));
     }
 
     public function testCollectorDerivesToolDeclarationsAndFillsRegistry(): void
@@ -173,6 +173,12 @@ final class ToolResourcesTest extends TestCase
         static::assertNotNull($mapping);
         static::assertSame('app://self/reminder', $mapping->resourceUri);
         static::assertSame('put', $mapping->method);
+    }
+
+    /** @param array<array-key, mixed> $body */
+    private static function field(array $body, int|string $key, mixed $default = null): mixed
+    {
+        return $body[$key] ?? $default;
     }
 
     private static function injector(): InjectorInterface
