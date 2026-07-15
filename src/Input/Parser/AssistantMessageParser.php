@@ -34,7 +34,8 @@ final class AssistantMessageParser implements MessageVariantParser
         $errors = [];
         foreach (Coerce::listOfObjects($data['toolCalls'] ?? []) as $index => $rawCall) {
             $call = AssistantToolCallParser::parse($rawCall);
-            if (!$call->isOk()) {
+            $callIsOk = $call->isOk();
+            if (!$callIsOk) {
                 foreach ($call->unwrapErr() as $error) {
                     $errors[] = $error->prefix("toolCalls[{$index}]");
                 }

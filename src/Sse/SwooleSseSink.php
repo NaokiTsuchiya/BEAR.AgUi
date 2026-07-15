@@ -35,7 +35,8 @@ final readonly class SwooleSseSink implements SseSinkInterface
         foreach ($frames as $frame) {
             // write() returns false once the client disconnected; stop
             // pulling the (potentially long) stream in that case.
-            if (!$this->response->write($frame)) {
+            $written = $this->response->write($frame);
+            if (!$written) {
                 return;
             }
         }

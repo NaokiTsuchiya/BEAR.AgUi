@@ -53,13 +53,14 @@ final class Cli
             return 0;
         }
 
-        while (($line = fgets(STDIN)) !== false) {
+        $line = fgets(STDIN);
+        while ($line !== false) {
             $text = trim($line);
-            if ($text === '') {
-                continue;
+            if ($text !== '') {
+                $this->runTurn($client, $log, $renderer, $threadId, $text);
             }
 
-            $this->runTurn($client, $log, $renderer, $threadId, $text);
+            $line = fgets(STDIN);
         }
 
         return 0;
@@ -81,11 +82,14 @@ final class Cli
             'messages' => $log->toMessages(),
         ];
 
-        /** @param array<string, mixed> $event */
-        $client->stream($body, static function (array $event) use ($renderer, $log): void {
-            $renderer->render($event);
-            $log->observe($event);
-        });
+        $client->stream(
+            $body,
+            /** @param array<string, mixed> $event */
+            static function (array $event) use ($renderer, $log): void {
+                $renderer->render($event);
+                $log->observe($event);
+            },
+        );
 
         echo "\n";
     }

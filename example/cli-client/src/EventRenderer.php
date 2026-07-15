@@ -63,14 +63,15 @@ final class EventRenderer
     /** @param array<string, mixed> $event */
     private function renderRunFinished(array $event): void
     {
-        $outcome = $event['outcome'] ?? null;
-        if (!is_array($outcome) || ($outcome['type'] ?? null) !== 'interrupt') {
+        $outcome = self::asArray($event['outcome'] ?? null);
+        if ($outcome === null || ($outcome['type'] ?? null) !== 'interrupt') {
             return;
         }
 
-        $interrupts = is_array($outcome['interrupts'] ?? null) ? $outcome['interrupts'] : [];
-        foreach ($interrupts as $interrupt) {
-            if (!is_array($interrupt)) {
+        $interrupts = self::asArray($outcome['interrupts'] ?? null) ?? [];
+        $interruptArrays = array_map(self::asArray(...), $interrupts);
+        foreach ($interruptArrays as $interrupt) {
+            if ($interrupt === null) {
                 continue;
             }
 
@@ -90,5 +91,11 @@ final class EventRenderer
     private static function stringOrEmpty(mixed $value): string
     {
         return is_string($value) ? $value : '';
+    }
+
+    /** @return array<array-key, mixed>|null */
+    private static function asArray(mixed $value): array|null
+    {
+        return is_array($value) ? $value : null;
     }
 }

@@ -12,7 +12,6 @@ use NaokiTsuchiya\BEARAgUi\Input\Result;
 
 use function array_key_exists;
 use function is_array;
-use function is_string;
 use function json_decode;
 
 use const JSON_THROW_ON_ERROR;
@@ -48,12 +47,13 @@ final class AssistantToolCallParser
         $errors = [];
 
         $id = RequireId::from($data);
+        $idIsOk = $id->isOk();
         $idValue = null;
-        if ($id->isOk()) {
+        if ($idIsOk) {
             $idValue = $id->unwrap();
         }
 
-        if (!$id->isOk()) {
+        if (!$idIsOk) {
             foreach ($id->unwrapErr() as $error) {
                 $errors[] = $error;
             }
@@ -89,12 +89,13 @@ final class AssistantToolCallParser
         }
 
         $decoded = self::decodeArguments($function);
+        $decodedIsOk = $decoded->isOk();
         $arguments = null;
-        if ($decoded->isOk()) {
+        if ($decodedIsOk) {
             $arguments = $decoded->unwrap();
         }
 
-        if (!$decoded->isOk()) {
+        if (!$decodedIsOk) {
             foreach ($decoded->unwrapErr() as $error) {
                 $errors[] = $error;
             }
@@ -114,8 +115,8 @@ final class AssistantToolCallParser
             return Result::err([new ParseError('function.arguments is required')]);
         }
 
-        $raw = $function['arguments'];
-        if (!is_string($raw)) {
+        $raw = Coerce::nullableString($function['arguments']);
+        if ($raw === null) {
             return Result::err([new ParseError('function.arguments must be a string')]);
         }
 

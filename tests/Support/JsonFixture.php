@@ -23,7 +23,8 @@ final class JsonFixture
     public static function load(string $relativePath): string
     {
         $path = dirname(__DIR__) . '/Fixtures/' . $relativePath;
-        if (!is_file($path)) {
+        $isFile = is_file($path);
+        if (!$isFile) {
             throw new RuntimeException("Fixture not found: {$relativePath}");
         }
 

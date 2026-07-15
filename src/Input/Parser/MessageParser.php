@@ -34,7 +34,8 @@ final class MessageParser
     public static function parse(array $data): Result
     {
         $id = RequireId::from($data);
-        if (!$id->isOk()) {
+        $idIsOk = $id->isOk();
+        if (!$idIsOk) {
             return Result::err($id->unwrapErr());
         }
 

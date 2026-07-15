@@ -42,7 +42,8 @@ final readonly class CannedConversation
         $messages = StubRequest::messages($requestBody);
         $scenario = StubScenario::detect($messages);
 
-        if (StubRequest::isToolTurn($messages)) {
+        $isToolTurn = StubRequest::isToolTurn($messages);
+        if ($isToolTurn) {
             return $this->finalTextTurn($model, $scenario, StubRequest::trailingToolContent($messages));
         }
 
@@ -93,9 +94,11 @@ final readonly class CannedConversation
     /** @return list<array<string, mixed>> */
     private function finalTextTurn(string $model, string $scenario, string $toolContent): array
     {
+        $finalPrefix = StubScenario::FINAL_PREFIX[$scenario] ?? '';
+
         return [
             $this->chunk($model, ['role' => 'assistant'], null),
-            $this->chunk($model, ['content' => StubScenario::FINAL_PREFIX[$scenario]], null),
+            $this->chunk($model, ['content' => $finalPrefix], null),
             $this->chunk($model, ['content' => $toolContent], null),
             $this->chunk($model, ['content' => '.'], null),
             $this->chunk($model, [], 'stop'),

@@ -25,13 +25,19 @@ final readonly class OpenAiToolMapper
      */
     public function map(array $tools): array
     {
-        return array_map(static fn(Tool $tool): array => [
+        return array_map($this->mapTool(...), $tools);
+    }
+
+    /** @return array<string, mixed> */
+    private function mapTool(Tool $tool): array
+    {
+        return [
             'type' => 'function',
             'function' => [
                 'name' => $tool->name,
                 'description' => $tool->description,
                 'parameters' => $tool->inputSchema,
             ],
-        ], $tools);
+        ];
     }
 }

@@ -110,16 +110,15 @@ final class OpenAiStreamingLlmClientTest extends TestCase
         $request = $http->requests[0] ?? null;
         static::assertInstanceOf(RequestInterface::class, $request);
 
-        $sent = json_decode((string) $request->getBody(), true, 512, JSON_THROW_ON_ERROR);
-        static::assertIsArray($sent);
-        static::assertSame('stub-model', $sent['model']);
-        static::assertTrue($sent['stream']);
+        $sent = self::asArray(json_decode((string) $request->getBody(), true, 512, JSON_THROW_ON_ERROR));
+        static::assertSame('stub-model', $sent['model'] ?? null);
+        static::assertTrue($sent['stream'] ?? false);
         static::assertSame(
             [
                 ['role' => 'system', 'content' => 'You are helpful.'],
                 ['role' => 'user', 'content' => 'What time is it?'],
             ],
-            $sent['messages'],
+            $sent['messages'] ?? null,
         );
         static::assertSame(
             [
@@ -136,7 +135,7 @@ final class OpenAiStreamingLlmClientTest extends TestCase
                     ],
                 ],
             ],
-            $sent['tools'],
+            $sent['tools'] ?? null,
         );
     }
 
@@ -321,7 +320,7 @@ final class OpenAiStreamingLlmClientTest extends TestCase
             $events = self::stream($http, '', [Message::user('hi')], []);
             $lastKey = array_key_last($events);
             static::assertNotNull($lastKey);
-            $last = $events[$lastKey];
+            $last = $events[$lastKey] ?? null;
             static::assertNotNull($last);
 
             static::assertSame(StreamEvent::MESSAGE_STOP, $last->type, "finish_reason={$finishReason}");
@@ -356,12 +355,21 @@ final class OpenAiStreamingLlmClientTest extends TestCase
      */
     private static function pairs(array $events): array
     {
-        return array_map(static fn(StreamEvent $event): array => [$event->type, $event->data], $events);
+        return array_map(
+            /** @return array{0: string, 1: array<string, mixed>} */
+            static fn(StreamEvent $event): array => [$event->type, $event->data],
+            $events,
+        );
     }
 
     private static function cannedHttp(): StubHttpClient
     {
         return new StubHttpClient(
+            /**
+             * @param array<string, mixed> $requestBody
+             *
+             * @return iterable<int, array<string, mixed>>
+             */
             static fn(array $requestBody): iterable => (new CannedConversation(self::CREATED))->respond($requestBody),
         );
     }
@@ -369,7 +377,23 @@ final class OpenAiStreamingLlmClientTest extends TestCase
     /** @param list<array<string, mixed>> $chunks */
     private static function scriptedHttp(array $chunks): StubHttpClient
     {
-        return new StubHttpClient(static fn(array $_requestBody): iterable => $chunks);
+        return new StubHttpClient(
+            /**
+             * @param array<string, mixed> $_requestBody
+             *
+             * @return iterable<int, array<string, mixed>>
+             */
+            static fn(array $_requestBody): iterable => $chunks,
+        );
+    }
+
+    /** @return array<string, mixed> */
+    private static function asArray(mixed $value): array
+    {
+        static::assertIsArray($value);
+
+        /** @var array<string, mixed> $value */
+        return $value;
     }
 
     /**

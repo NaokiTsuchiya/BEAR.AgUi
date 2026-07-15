@@ -57,25 +57,23 @@ final class AgUiHttpClient
      *
      * @throws RuntimeException When curl fails to initialize, or the request itself errors out.
      *
-     * @mago-expect analysis:no-value
-     *
      * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      *
      * The CurlHandle parameter on the CURLOPT_HEADERFUNCTION / CURLOPT_WRITEFUNCTION
      * closures below is required by curl's callback signature but never read.
      *
      * curl_exec() drives CURLOPT_HEADERFUNCTION / CURLOPT_WRITEFUNCTION as
-     * side effects that mutate $isJsonResponse / $rawJsonBody by
-     * reference; mago's static flow analysis does not model mutation
-     * through a curl callback, so it treats both as still holding their
-     * initial value once curl_exec() returns and flags the branch below as
-     * unreachable — it is not, as manual smoke against the M3 bear app
-     * confirms.
+     * side effects that mutate $isJsonResponse / $rawJsonBody by reference;
+     * $rawJsonBody is declared `string` explicitly (rather than left to
+     * infer from its `''` initializer) so the check below is analyzed
+     * against the declared type, not the narrower literal `''` the
+     * initializer would otherwise suggest.
      */
     public function stream(array $body, callable $onEvent): void
     {
         $reader = new SseFrameReader();
         $isJsonResponse = false;
+        /** @var string $rawJsonBody */
         $rawJsonBody = '';
 
         $handle = curl_init($this->baseUrl . '/invocations');
@@ -136,24 +134,43 @@ final class AgUiHttpClient
     private static function describeValidationError(string $rawJsonBody): string
     {
         try {
-            $decoded = json_decode($rawJsonBody, true, flags: JSON_THROW_ON_ERROR);
+            $decoded = self::asArray(json_decode($rawJsonBody, true, flags: JSON_THROW_ON_ERROR));
         } catch (JsonException) {
             return $rawJsonBody;
         }
 
-        if (!is_array($decoded) || !is_array($decoded['errors'] ?? null)) {
+        if ($decoded === null) {
             return $rawJsonBody;
         }
 
-        $messages = [];
-        foreach ($decoded['errors'] as $error) {
-            if (!is_array($error) || !is_string($error['message'] ?? null)) {
-                continue;
-            }
-
-            $messages[] = $error['message'];
+        $errors = self::asArray($decoded['errors'] ?? null);
+        if ($errors === null) {
+            return $rawJsonBody;
         }
 
+        $messages = array_values(array_filter(
+            array_map(self::extractErrorMessage(...), $errors),
+            static fn(string|null $message): bool => $message !== null,
+        ));
+
         return $messages === [] ? $rawJsonBody : implode('; ', $messages);
+    }
+
+    private static function extractErrorMessage(mixed $error): string|null
+    {
+        $errorArray = self::asArray($error);
+
+        return $errorArray === null ? null : self::asString($errorArray['message'] ?? null);
+    }
+
+    /** @return array<array-key, mixed>|null */
+    private static function asArray(mixed $value): array|null
+    {
+        return is_array($value) ? $value : null;
+    }
+
+    private static function asString(mixed $value): string|null
+    {
+        return is_string($value) ? $value : null;
     }
 }

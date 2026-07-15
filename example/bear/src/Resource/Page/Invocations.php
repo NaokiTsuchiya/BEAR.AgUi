@@ -46,13 +46,18 @@ final class Invocations extends ResourceObject
     public function onPost(string $rawBody): static
     {
         $result = $this->parser->parse($rawBody);
-        if (!$result->isOk()) {
+        $isOk = $result->isOk();
+        if (!$isOk) {
             $this->code = 400;
             $this->body = [
                 'code' => 'VALIDATION_ERROR',
-                'errors' => array_map(static fn(ParseError $error): array => [
-                    'message' => $error->message,
-                ], $result->unwrapErr()),
+                'errors' => array_map(
+                    /** @return array{message: string} */
+                    static fn(ParseError $error): array => [
+                        'message' => $error->message,
+                    ],
+                    $result->unwrapErr(),
+                ),
             ];
 
             return $this;

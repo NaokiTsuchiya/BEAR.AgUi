@@ -59,7 +59,8 @@ final class RunAgentInputParser
     public function parse(string $body): Result
     {
         $decoded = self::decode($body);
-        if (!$decoded->isOk()) {
+        $decodedIsOk = $decoded->isOk();
+        if (!$decodedIsOk) {
             return Result::err($decoded->unwrapErr());
         }
 
@@ -97,7 +98,8 @@ final class RunAgentInputParser
         // list, so its "non-empty user message required" check can only run
         // once the siblings above are clean.
         $trigger = self::splitTrigger($messages);
-        if (!$trigger->isOk()) {
+        $triggerIsOk = $trigger->isOk();
+        if (!$triggerIsOk) {
             return Result::err($trigger->unwrapErr());
         }
 
@@ -197,7 +199,8 @@ final class RunAgentInputParser
         $errors = [];
         foreach (Coerce::listOfObjects($raw) as $index => $entry) {
             $result = $parse($entry);
-            if (!$result->isOk()) {
+            $resultIsOk = $result->isOk();
+            if (!$resultIsOk) {
                 foreach ($result->unwrapErr() as $error) {
                     $errors[] = $error->prefix("{$field}[{$index}]");
                 }

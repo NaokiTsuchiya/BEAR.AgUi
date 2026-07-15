@@ -19,6 +19,7 @@ use NaokiTsuchiya\BEARAgUi\Event\ToolCallResult;
 use NaokiTsuchiya\BEARAgUi\Event\ToolCallStart;
 use NaokiTsuchiya\BEARAgUi\Fake\FakeDispatcher;
 use NaokiTsuchiya\BEARAgUi\Fake\FakeStreamingLlmClient;
+use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 use NaokiTsuchiya\BEARAgUi\Support\StreamingPipelineFixture;
 use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingDispatcher;
 use NaokiTsuchiya\BEARAgUi\ToolUse\RecordingStreamingLlmClient;
@@ -63,10 +64,13 @@ final class StreamingAgentContractTest extends TestCase
             ],
             $types,
         );
-        static::assertInstanceOf(TextMessageContent::class, $events[2]);
-        static::assertSame('hello ', $events[2]->delta);
-        static::assertInstanceOf(TextMessageContent::class, $events[3]);
-        static::assertSame('world', $events[3]->delta);
+        $second = self::requireIndex($events, 2, 'the third event');
+        $third = self::requireIndex($events, 3, 'the fourth event');
+
+        static::assertInstanceOf(TextMessageContent::class, $second);
+        static::assertSame('hello ', $second->delta);
+        static::assertInstanceOf(TextMessageContent::class, $third);
+        static::assertSame('world', $third->delta);
     }
 
     public function testSingleToolCallRoundTripUsesRealRegistryData(): void
@@ -107,14 +111,18 @@ final class StreamingAgentContractTest extends TestCase
             $types,
         );
 
-        static::assertInstanceOf(ToolCallStart::class, $events[1]);
-        static::assertSame('call-1', $events[1]->toolCallId);
-        static::assertSame('search', $events[1]->toolCallName);
-        static::assertInstanceOf(ToolCallArgs::class, $events[2]);
-        static::assertSame('{"q":"hi"}', $events[2]->delta);
-        static::assertInstanceOf(ToolCallResult::class, $events[4]);
-        static::assertSame('call-1', $events[4]->toolCallId);
-        static::assertSame('hits', $events[4]->content);
+        $second = self::requireIndex($events, 1, 'the second event');
+        $third = self::requireIndex($events, 2, 'the third event');
+        $fifth = self::requireIndex($events, 4, 'the fifth event');
+
+        static::assertInstanceOf(ToolCallStart::class, $second);
+        static::assertSame('call-1', $second->toolCallId);
+        static::assertSame('search', $second->toolCallName);
+        static::assertInstanceOf(ToolCallArgs::class, $third);
+        static::assertSame('{"q":"hi"}', $third->delta);
+        static::assertInstanceOf(ToolCallResult::class, $fifth);
+        static::assertSame('call-1', $fifth->toolCallId);
+        static::assertSame('hits', $fifth->content);
     }
 
     public function testParallelToolCallsAreCorrelatedByFifo(): void
@@ -152,23 +160,31 @@ final class StreamingAgentContractTest extends TestCase
             ),
         ));
 
-        static::assertInstanceOf(ToolCallStart::class, $toolEvents[0]);
-        static::assertSame('call-1', $toolEvents[0]->toolCallId);
-        static::assertInstanceOf(ToolCallStart::class, $toolEvents[1]);
-        static::assertSame('call-2', $toolEvents[1]->toolCallId);
+        $te0 = self::requireIndex($toolEvents, 0, 'tool event 0');
+        $te1 = self::requireIndex($toolEvents, 1, 'tool event 1');
+        $te2 = self::requireIndex($toolEvents, 2, 'tool event 2');
+        $te3 = self::requireIndex($toolEvents, 3, 'tool event 3');
+        $te4 = self::requireIndex($toolEvents, 4, 'tool event 4');
+        $te5 = self::requireIndex($toolEvents, 5, 'tool event 5');
+        $te7 = self::requireIndex($toolEvents, 7, 'tool event 7');
+
+        static::assertInstanceOf(ToolCallStart::class, $te0);
+        static::assertSame('call-1', $te0->toolCallId);
+        static::assertInstanceOf(ToolCallStart::class, $te1);
+        static::assertSame('call-2', $te1->toolCallId);
 
         // First tool_result is FIFO call-1.
-        static::assertInstanceOf(ToolCallArgs::class, $toolEvents[2]);
-        static::assertSame('call-1', $toolEvents[2]->toolCallId);
-        static::assertInstanceOf(ToolCallEnd::class, $toolEvents[3]);
-        static::assertInstanceOf(ToolCallResult::class, $toolEvents[4]);
-        static::assertSame('call-1', $toolEvents[4]->toolCallId);
-        static::assertSame('A', $toolEvents[4]->content);
+        static::assertInstanceOf(ToolCallArgs::class, $te2);
+        static::assertSame('call-1', $te2->toolCallId);
+        static::assertInstanceOf(ToolCallEnd::class, $te3);
+        static::assertInstanceOf(ToolCallResult::class, $te4);
+        static::assertSame('call-1', $te4->toolCallId);
+        static::assertSame('A', $te4->content);
 
-        static::assertInstanceOf(ToolCallArgs::class, $toolEvents[5]);
-        static::assertSame('call-2', $toolEvents[5]->toolCallId);
-        static::assertInstanceOf(ToolCallResult::class, $toolEvents[7]);
-        static::assertSame('B', $toolEvents[7]->content);
+        static::assertInstanceOf(ToolCallArgs::class, $te5);
+        static::assertSame('call-2', $te5->toolCallId);
+        static::assertInstanceOf(ToolCallResult::class, $te7);
+        static::assertSame('B', $te7->content);
     }
 
     public function testConfirmationRequiredEmitsInterruptOutcomeAndStopsRun(): void
@@ -190,17 +206,20 @@ final class StreamingAgentContractTest extends TestCase
 
         $finished = end($events);
         static::assertInstanceOf(RunFinished::class, $finished);
-        $decoded = json_decode(json_encode($finished, JSON_THROW_ON_ERROR), true);
-        static::assertIsArray($decoded);
-        $outcome = $decoded['outcome'];
-        static::assertIsArray($outcome);
-        static::assertSame('interrupt', $outcome['type']);
-        $interrupts = $outcome['interrupts'];
-        static::assertIsArray($interrupts);
-        $interrupt = $interrupts[0];
-        static::assertIsArray($interrupt);
-        static::assertSame('tool_confirmation', $interrupt['reason']);
-        static::assertSame('call-1', $interrupt['toolCallId']);
+
+        $decoded = Coerce::stringKeyedArray(json_decode(json_encode($finished, JSON_THROW_ON_ERROR), true));
+        if ($decoded === null) {
+            static::fail('expected the event to encode to a JSON object');
+        }
+
+        $outcome = self::requireArray($decoded, 'outcome', 'the event outcome');
+        static::assertSame('interrupt', self::requireString($outcome, 'type', 'the outcome type'));
+
+        $interrupts = self::requireArray($outcome, 'interrupts', 'the outcome interrupts');
+        $interrupt = self::requireArray($interrupts, 0, 'the first interrupt');
+
+        static::assertSame('tool_confirmation', self::requireString($interrupt, 'reason', 'the interrupt reason'));
+        static::assertSame('call-1', self::requireString($interrupt, 'toolCallId', 'the interrupt toolCallId'));
         static::assertCount(0, $dispatcher->calls);
     }
 
@@ -286,5 +305,59 @@ final class StreamingAgentContractTest extends TestCase
         }
 
         static::assertSame(2, $deltas);
+    }
+
+    /**
+     * Fetches a value at a key/index, failing loudly rather than returning a
+     * possibly-undefined value. Shared by every guard clause above so the
+     * class carries one branch per shape instead of one per call site.
+     *
+     * @template TKey of array-key
+     * @template TValue
+     *
+     * @param array<TKey, TValue> $container
+     * @param TKey                $key
+     *
+     * @return TValue
+     */
+    private static function requireIndex(array $container, int|string $key, string $label): mixed
+    {
+        if (!array_key_exists($key, $container)) {
+            static::fail(sprintf('expected %s to be present', $label));
+        }
+
+        return $container[$key];
+    }
+
+    /**
+     * Fetches an array field, failing loudly rather than returning a
+     * possibly-undefined or possibly-non-array value.
+     *
+     * @param array<array-key, mixed> $container
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function requireArray(array $container, int|string $key, string $label): array
+    {
+        if (!array_key_exists($key, $container) || !is_array($container[$key])) {
+            static::fail(sprintf('expected %s to be an array', $label));
+        }
+
+        return $container[$key];
+    }
+
+    /**
+     * Fetches a string field, failing loudly rather than returning a
+     * possibly-undefined or possibly-non-string value.
+     *
+     * @param array<array-key, mixed> $container
+     */
+    private static function requireString(array $container, int|string $key, string $label): string
+    {
+        if (!array_key_exists($key, $container) || !is_string($container[$key])) {
+            static::fail(sprintf('expected %s to be a string', $label));
+        }
+
+        return $container[$key];
     }
 }

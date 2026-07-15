@@ -107,7 +107,8 @@ final class MessageHistoryMapper
     private function toToolResult(ToolMessage $message): ToolResult
     {
         $outcome = $message->outcome;
-        if ($outcome->isError()) {
+        $isError = $outcome->isError();
+        if ($isError) {
             // `error` is non-null when isError() is true; cast for the analyzer.
             $errorText = (string) $outcome->error;
             $fallback = $errorText === '' && is_string($outcome->content) ? $outcome->content : $errorText;

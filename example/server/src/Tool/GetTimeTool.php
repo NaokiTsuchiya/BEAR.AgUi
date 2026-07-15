@@ -10,6 +10,7 @@ use DateTimeInterface;
 use DateTimeZone;
 use Exception;
 
+use function array_key_exists;
 use function is_string;
 
 /**
@@ -49,8 +50,9 @@ final readonly class GetTimeTool
      */
     public function __invoke(array $input): string
     {
-        $requested = $input['timezone'] ?? null;
-        $timezone = is_string($requested) ? $this->zoneOrUtc($requested) : self::utc();
+        $timezone = array_key_exists('timezone', $input) && is_string($input['timezone'])
+            ? $this->zoneOrUtc($input['timezone'])
+            : self::utc();
 
         return (new DateTimeImmutable('now', $timezone))->format(DateTimeInterface::ATOM);
     }

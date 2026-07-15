@@ -23,7 +23,6 @@
 declare(strict_types=1);
 
 use Example\Server\Bootstrap;
-use NaokiTsuchiya\BEARAgUi\Input\ParseError;
 use NaokiTsuchiya\BEARAgUi\Input\RunAgentInputParser;
 use NaokiTsuchiya\BEARAgUi\Sse\PhpSapiSseSink;
 
@@ -67,12 +66,17 @@ if ($mediaType !== 'application/json') {
 }
 
 $result = (new RunAgentInputParser())->parse((string) file_get_contents('php://input'));
-if (!$result->isOk()) {
+$isOk = $result->isOk();
+if (!$isOk) {
+    /** @var list<array{message: string}> $errors */
+    $errors = [];
+    foreach ($result->unwrapErr() as $parseError) {
+        $errors[] = ['message' => $parseError->message];
+    }
+
     respond_json(400, [
         'code' => 'VALIDATION_ERROR',
-        'errors' => array_map(static fn(ParseError $error): array => [
-            'message' => $error->message,
-        ], $result->unwrapErr()),
+        'errors' => $errors,
     ]);
 
     return;

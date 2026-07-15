@@ -50,7 +50,8 @@ final class ExampleBearInjectorFactory
     private static function tmpDir(string $flavor): string
     {
         $dir = sys_get_temp_dir() . '/bear-agui-example-di-' . $flavor;
-        if (!is_dir($dir)) {
+        $dirExists = is_dir($dir);
+        if (!$dirExists) {
             mkdir($dir, 0o777, true);
         }
 

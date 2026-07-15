@@ -11,6 +11,7 @@ use BEAR\ToolUse\Schema\Tool;
 use Generator;
 use Override;
 
+use function array_key_exists;
 use function is_string;
 
 /**
@@ -80,8 +81,6 @@ final readonly class RecordingStreamingLlmClient implements StreamingLlmClientIn
 
     private function dataString(StreamEvent $event, string $key): string
     {
-        $value = $event->data[$key] ?? '';
-
-        return is_string($value) ? $value : '';
+        return array_key_exists($key, $event->data) && is_string($event->data[$key]) ? $event->data[$key] : '';
     }
 }

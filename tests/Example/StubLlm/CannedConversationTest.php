@@ -18,8 +18,8 @@ use function array_slice;
 use function array_unique;
 use function array_values;
 use function implode;
-use function is_string;
 use function iterator_to_array;
+use function sprintf;
 
 /**
  * Pure unit tests for the stub's canned OpenAI conversation (D21). No CoversClass:
@@ -48,21 +48,14 @@ final class CannedConversationTest extends TestCase
 
         $starts = self::toolCallStarts($chunks);
         static::assertCount(1, $starts);
-        static::assertSame('call_demo_1', $starts[0]['id']);
-        static::assertSame('function', $starts[0]['type']);
-        $startFunction = $starts[0]['function'];
-        static::assertIsArray($startFunction);
-        static::assertSame('get_time', $startFunction['name']);
+        $firstStart = self::requireArray(self::requireKey($starts, 0));
+        static::assertSame('call_demo_1', self::requireKey($firstStart, 'id'));
+        static::assertSame('function', self::requireKey($firstStart, 'type'));
+        $startFunction = self::requireArray(self::requireKey($firstStart, 'function'));
+        static::assertSame('get_time', self::requireKey($startFunction, 'name'));
 
         // Non-empty arguments fragments, in stream order: exactly two, concatenating to the full JSON.
-        $arguments = array_map(static function (array $fragment): string {
-            $function = $fragment['function'];
-            self::assertIsArray($function);
-            $fragmentArguments = $function['arguments'];
-            self::assertIsString($fragmentArguments);
-
-            return $fragmentArguments;
-        }, self::toolCallFragments($chunks));
+        $arguments = array_map(self::functionArguments(...), self::toolCallFragments($chunks));
         $fragments = array_values(array_filter($arguments, static fn(string $fragment): bool => $fragment !== ''));
         static::assertCount(2, $fragments);
         static::assertSame('{"timezone":"UTC"}', implode('', $fragments));
@@ -119,12 +112,12 @@ final class CannedConversationTest extends TestCase
 
         $starts = self::toolCallStarts($chunks);
         static::assertCount(2, $starts);
-        $firstFunction = $starts[0]['function'];
-        static::assertIsArray($firstFunction);
-        static::assertSame('weather_get', $firstFunction['name']);
-        $secondFunction = $starts[1]['function'];
-        static::assertIsArray($secondFunction);
-        static::assertSame('news_get', $secondFunction['name']);
+        $firstStart = self::requireArray(self::requireKey($starts, 0));
+        $firstFunction = self::requireArray(self::requireKey($firstStart, 'function'));
+        static::assertSame('weather_get', self::requireKey($firstFunction, 'name'));
+        $secondStart = self::requireArray(self::requireKey($starts, 1));
+        $secondFunction = self::requireArray(self::requireKey($secondStart, 'function'));
+        static::assertSame('news_get', self::requireKey($secondFunction, 'name'));
         self::assertFinishedWith('tool_calls', $chunks);
     }
 
@@ -138,9 +131,9 @@ final class CannedConversationTest extends TestCase
 
         $starts = self::toolCallStarts($chunks);
         static::assertCount(1, $starts);
-        $function = $starts[0]['function'];
-        static::assertIsArray($function);
-        static::assertSame('reminder_put', $function['name']);
+        $firstStart = self::requireArray(self::requireKey($starts, 0));
+        $function = self::requireArray(self::requireKey($firstStart, 'function'));
+        static::assertSame('reminder_put', self::requireKey($function, 'name'));
         self::assertFinishedWith('tool_calls', $chunks);
     }
 
@@ -173,26 +166,20 @@ final class CannedConversationTest extends TestCase
         static::assertNotSame([], $chunks);
         foreach ($chunks as $chunk) {
             static::assertSame(['id', 'object', 'created', 'model', 'choices'], array_keys($chunk));
-            static::assertNotSame('', $chunk['id']);
-            static::assertSame('chat.completion.chunk', $chunk['object']);
-            static::assertSame(self::CREATED, $chunk['created']);
-            static::assertSame($model, $chunk['model']);
+            static::assertNotSame('', self::requireKey($chunk, 'id'));
+            static::assertSame('chat.completion.chunk', self::requireKey($chunk, 'object'));
+            static::assertSame(self::CREATED, self::requireKey($chunk, 'created'));
+            static::assertSame($model, self::requireKey($chunk, 'model'));
 
-            $choices = $chunk['choices'];
-            self::assertIsArray($choices);
+            $choices = self::choicesOf($chunk);
             static::assertCount(1, $choices);
-
-            $choice = $choices[0];
-            self::assertIsArray($choice);
-            static::assertSame(0, $choice['index']);
+            $choice = self::requireArray(self::requireKey($choices, 0));
+            static::assertSame(0, self::requireKey($choice, 'index'));
         }
 
-        $lastChunk = $chunks[array_key_last($chunks)];
-        $lastChoices = $lastChunk['choices'];
-        self::assertIsArray($lastChoices);
-        $lastChoice = $lastChoices[0];
-        self::assertIsArray($lastChoice);
-        static::assertEquals(new stdClass(), $lastChoice['delta']);
+        $lastChunk = self::requireArray(self::requireKey($chunks, array_key_last($chunks)));
+        $lastChoice = self::firstChoice($lastChunk);
+        static::assertEquals(new stdClass(), self::requireKey($lastChoice, 'delta'));
     }
 
     /**
@@ -202,19 +189,16 @@ final class CannedConversationTest extends TestCase
      */
     private static function assertFinishedWith(string $reason, array $chunks): void
     {
-        $reasons = array_map(static function (array $chunk): string|null {
-            $choices = $chunk['choices'];
-            self::assertIsArray($choices);
-            $choice = $choices[0];
-            self::assertIsArray($choice);
-            $finishReason = $choice['finish_reason'];
-            self::assertTrue($finishReason === null || is_string($finishReason));
+        $reasons = array_map(self::finishReasonOf(...), $chunks);
 
-            return $finishReason;
-        }, $chunks);
-
-        static::assertSame($reason, $reasons[array_key_last($reasons)]);
+        static::assertSame($reason, self::requireKey($reasons, array_key_last($reasons)));
         static::assertSame([null], array_values(array_unique(array_slice($reasons, 0, -1))));
+    }
+
+    /** @param array<array-key, mixed> $chunk */
+    private static function finishReasonOf(array $chunk): string|null
+    {
+        return self::requireNullableString(self::requireKey(self::firstChoice($chunk), 'finish_reason'));
     }
 
     /**
@@ -224,38 +208,52 @@ final class CannedConversationTest extends TestCase
      */
     private static function deltas(array $chunks): array
     {
-        return array_map(static function (array $chunk): array {
-            $choices = $chunk['choices'];
-            self::assertIsArray($choices);
-            $choice = $choices[0];
-            self::assertIsArray($choice);
-            $delta = $choice['delta'];
+        return array_map(self::deltaOf(...), $chunks);
+    }
 
-            if ($delta instanceof stdClass) {
-                return [];
-            }
+    /**
+     * @param array<array-key, mixed> $chunk
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function deltaOf(array $chunk): array
+    {
+        return self::requireArrayOrEmptyObject(self::requireKey(self::firstChoice($chunk), 'delta'));
+    }
 
-            self::assertIsArray($delta);
+    /**
+     * A `stdClass` delta means "empty object on the wire"; every other delta
+     * must be an array.
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function requireArrayOrEmptyObject(mixed $value): array
+    {
+        if ($value instanceof stdClass) {
+            return [];
+        }
 
-            return $delta;
-        }, $chunks);
+        self::assertIsArray($value);
+
+        return $value;
     }
 
     /** @param list<array<string, mixed>> $chunks */
     private static function concatContent(array $chunks): string
     {
-        $contents = array_map(static function (array $delta): string {
-            if (!array_key_exists('content', $delta)) {
-                return '';
-            }
-
-            $content = $delta['content'];
-            self::assertIsString($content);
-
-            return $content;
-        }, self::deltas($chunks));
+        $contents = array_map(self::contentTextOf(...), self::deltas($chunks));
 
         return implode('', $contents);
+    }
+
+    /** @param array<array-key, mixed> $delta */
+    private static function contentTextOf(array $delta): string
+    {
+        if (!array_key_exists('content', $delta)) {
+            return '';
+        }
+
+        return self::requireString($delta['content']);
     }
 
     /**
@@ -267,10 +265,13 @@ final class CannedConversationTest extends TestCase
      */
     private static function toolCallStarts(array $chunks): array
     {
-        return array_values(array_filter(
-            self::toolCallFragments($chunks),
-            static fn(array $fragment): bool => array_key_exists('id', $fragment),
-        ));
+        return array_values(array_filter(self::toolCallFragments($chunks), self::hasId(...)));
+    }
+
+    /** @param array<array-key, mixed> $fragment */
+    private static function hasId(array $fragment): bool
+    {
+        return array_key_exists('id', $fragment);
     }
 
     /**
@@ -286,14 +287,83 @@ final class CannedConversationTest extends TestCase
                 continue;
             }
 
-            $toolCalls = $delta['tool_calls'];
-            self::assertIsArray($toolCalls);
-            foreach ($toolCalls as $toolCall) {
-                self::assertIsArray($toolCall);
+            foreach (self::requireArrayList($delta['tool_calls']) as $toolCall) {
                 $fragments[] = $toolCall;
             }
         }
 
         return $fragments;
+    }
+
+    /**
+     * @param array<array-key, mixed> $chunk
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function choicesOf(array $chunk): array
+    {
+        return self::requireArray(self::requireKey($chunk, 'choices'));
+    }
+
+    /**
+     * @param array<array-key, mixed> $chunk
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function firstChoice(array $chunk): array
+    {
+        return self::requireArray(self::requireKey(self::choicesOf($chunk), 0));
+    }
+
+    /** @param array<array-key, mixed> $fragment */
+    private static function functionArguments(array $fragment): string
+    {
+        $function = self::requireArray(self::requireKey($fragment, 'function'));
+
+        return self::requireString(self::requireKey($function, 'arguments'));
+    }
+
+    /** @return array<array-key, mixed> */
+    private static function requireArray(mixed $value): array
+    {
+        self::assertIsArray($value);
+
+        return $value;
+    }
+
+    /** @return list<array<array-key, mixed>> */
+    private static function requireArrayList(mixed $value): array
+    {
+        self::assertIsArray($value);
+
+        return array_map(self::requireArray(...), array_values($value));
+    }
+
+    private static function requireString(mixed $value): string
+    {
+        self::assertIsString($value);
+
+        return $value;
+    }
+
+    private static function requireNullableString(mixed $value): string|null
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        self::assertIsString($value);
+
+        return $value;
+    }
+
+    /** @param array<array-key, mixed> $array */
+    private static function requireKey(array $array, int|string $key): mixed
+    {
+        if (!array_key_exists($key, $array)) {
+            self::fail(sprintf('Missing array key: %s', $key));
+        }
+
+        return $array[$key];
     }
 }

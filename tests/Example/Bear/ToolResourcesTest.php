@@ -48,8 +48,8 @@ final class ToolResourcesTest extends TestCase
 
         static::assertSame(200, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertSame('Tokyo', $ro->body['city']);
-        static::assertSame('sunny', $ro->body['condition']);
+        static::assertSame('Tokyo', $ro->body['city'] ?? null);
+        static::assertSame('sunny', $ro->body['condition'] ?? null);
     }
 
     public function testNewsReturnsHeadlineForTopic(): void
@@ -60,8 +60,8 @@ final class ToolResourcesTest extends TestCase
 
         static::assertSame(200, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertSame('php', $ro->body['topic']);
-        static::assertNotSame('', $ro->body['headline']);
+        static::assertSame('php', $ro->body['topic'] ?? null);
+        static::assertNotSame('', $ro->body['headline'] ?? null);
     }
 
     public function testMessagePostReportsSent(): void
@@ -72,8 +72,8 @@ final class ToolResourcesTest extends TestCase
 
         static::assertSame(201, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertTrue($ro->body['sent']);
-        static::assertSame('alice@example.com', $ro->body['to']);
+        static::assertTrue($ro->body['sent'] ?? false);
+        static::assertSame('alice@example.com', $ro->body['to'] ?? null);
     }
 
     public function testReminderPutUpserts(): void
@@ -84,8 +84,8 @@ final class ToolResourcesTest extends TestCase
 
         static::assertSame(200, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertTrue($ro->body['saved']);
-        static::assertSame('r-1', $ro->body['id']);
+        static::assertTrue($ro->body['saved'] ?? false);
+        static::assertSame('r-1', $ro->body['id'] ?? null);
     }
 
     public function testPackageSearchReturnsTopResultForQuery(): void
@@ -178,7 +178,8 @@ final class ToolResourcesTest extends TestCase
     private static function injector(): InjectorInterface
     {
         $tmp = sys_get_temp_dir() . '/bear-agui-example-di-resources';
-        if (!is_dir($tmp)) {
+        $tmpExists = is_dir($tmp);
+        if (!$tmpExists) {
             mkdir($tmp, 0o777, true);
         }
 

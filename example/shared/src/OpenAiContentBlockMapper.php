@@ -29,9 +29,12 @@ final readonly class OpenAiContentBlockMapper
     /** @param array<string, mixed> $block */
     public function text(array $block): string
     {
-        $text = $block['text'] ?? null;
+        $isText = $this->isType($block, 'text');
+        if (!$isText) {
+            return '';
+        }
 
-        return $this->isType($block, 'text') && is_string($text) ? $text : '';
+        return $this->stringOrEmpty($block['text'] ?? null);
     }
 
     /**
@@ -64,12 +67,10 @@ final readonly class OpenAiContentBlockMapper
      */
     public function toolResult(array $block): array
     {
-        $content = $block['content'] ?? '';
-
         return [
             'role' => 'tool',
             'tool_call_id' => $block['tool_use_id'] ?? '',
-            'content' => is_string($content) ? $content : $this->encode($content),
+            'content' => $this->stringOrEncoded($block['content'] ?? ''),
         ];
     }
 
@@ -77,6 +78,16 @@ final readonly class OpenAiContentBlockMapper
     private function encodeArguments(mixed $input): string
     {
         return $input === [] ? '{}' : $this->encode($input);
+    }
+
+    private function stringOrEmpty(mixed $value): string
+    {
+        return is_string($value) ? $value : '';
+    }
+
+    private function stringOrEncoded(mixed $value): string
+    {
+        return is_string($value) ? $value : $this->encode($value);
     }
 
     private function encode(mixed $value): string

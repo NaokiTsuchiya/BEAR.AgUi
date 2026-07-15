@@ -25,7 +25,8 @@ final class SystemMessageParser implements MessageVariantParser
     public static function parseBody(string $id, array $data): Result
     {
         $content = RequireStringContent::from($data);
-        if (!$content->isOk()) {
+        $contentIsOk = $content->isOk();
+        if (!$contentIsOk) {
             return Result::err($content->unwrapErr());
         }
 

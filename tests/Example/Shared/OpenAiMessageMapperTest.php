@@ -70,15 +70,13 @@ final class OpenAiMessageMapperTest extends TestCase
 
         $mapped = (new OpenAiMessageMapper())->map('', [$assistant]);
 
-        static::assertNull($mapped[0]['content']);
+        $first = self::asArray($mapped[0] ?? null);
+        static::assertNull($first['content'] ?? null);
 
-        $toolCalls = $mapped[0]['tool_calls'];
-        static::assertIsArray($toolCalls);
-        $toolCall = $toolCalls[0];
-        static::assertIsArray($toolCall);
-        $function = $toolCall['function'];
-        static::assertIsArray($function);
-        static::assertSame('{}', $function['arguments']);
+        $toolCalls = self::asArray($first['tool_calls'] ?? null);
+        $toolCall = self::asArray($toolCalls[0] ?? null);
+        $function = self::asArray($toolCall['function'] ?? null);
+        static::assertSame('{}', $function['arguments'] ?? null);
     }
 
     public function testExpandsToolResultsToOneToolMessageEach(): void
@@ -97,5 +95,14 @@ final class OpenAiMessageMapperTest extends TestCase
             ],
             $mapped,
         );
+    }
+
+    /** @return array<string, mixed> */
+    private static function asArray(mixed $value): array
+    {
+        static::assertIsArray($value);
+
+        /** @var array<string, mixed> $value */
+        return $value;
     }
 }

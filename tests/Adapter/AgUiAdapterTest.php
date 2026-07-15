@@ -33,6 +33,7 @@ use const JSON_THROW_ON_ERROR;
 #[CoversClass(AgUiAdapter::class)]
 final class AgUiAdapterTest extends TestCase
 {
+    /** @throws RuntimeException */
     public function testTextDeltaWrappedByStartAndEndAroundRun(): void
     {
         $registry = new ToolCallRegistry();
@@ -49,13 +50,17 @@ final class AgUiAdapterTest extends TestCase
             $registry,
         ));
 
+        static::assertCount(6, $events);
+        if (!array_key_exists(5, $events)) {
+            throw new RuntimeException('Expected 6 events.');
+        }
+
         static::assertInstanceOf(RunStarted::class, $events[0]);
         static::assertInstanceOf(TextMessageStart::class, $events[1]);
         static::assertInstanceOf(TextMessageContent::class, $events[2]);
         static::assertInstanceOf(TextMessageContent::class, $events[3]);
         static::assertInstanceOf(TextMessageEnd::class, $events[4]);
         static::assertInstanceOf(RunFinished::class, $events[5]);
-        static::assertCount(6, $events);
 
         $messageId = $events[1]->messageId;
         static::assertSame($messageId, $events[2]->messageId);
@@ -65,6 +70,7 @@ final class AgUiAdapterTest extends TestCase
         static::assertSame(' there', $events[3]->delta);
     }
 
+    /** @throws RuntimeException */
     public function testConfirmationRequiredTerminatesRunWithInterruptOutcome(): void
     {
         $registry = new ToolCallRegistry();
@@ -83,27 +89,43 @@ final class AgUiAdapterTest extends TestCase
         ));
 
         static::assertCount(2, $events);
+        if (!array_key_exists(1, $events)) {
+            throw new RuntimeException('Expected 2 events.');
+        }
+
         static::assertInstanceOf(RunStarted::class, $events[0]);
         static::assertInstanceOf(RunFinished::class, $events[1]);
 
+        /** @var array<array-key, mixed> $decoded */
         $decoded = json_decode(json_encode($events[1], JSON_THROW_ON_ERROR), true);
         static::assertIsArray($decoded);
 
-        $outcome = $decoded['outcome'];
-        static::assertIsArray($outcome);
-        static::assertSame('interrupt', $outcome['type']);
+        $outcome = $this->requireArrayValue($decoded, 'outcome', 'Expected "outcome" array.');
+        static::assertSame('interrupt', $this->requireStringValue($outcome, 'type', 'Expected "outcome.type" string.'));
 
-        $interrupts = $outcome['interrupts'];
-        static::assertIsArray($interrupts);
+        $interrupts = $this->requireArrayValue($outcome, 'interrupts', 'Expected "outcome.interrupts" array.');
         static::assertCount(1, $interrupts);
 
-        $interrupt = $interrupts[0];
-        static::assertIsArray($interrupt);
-        static::assertSame('tool_confirmation', $interrupt['reason']);
-        static::assertSame('About to write /x', $interrupt['message']);
-        static::assertSame('call-9', $interrupt['toolCallId']);
+        $interrupt = $this->requireArrayValue($interrupts, 0, 'Expected interrupt at index 0.');
+
+        static::assertSame('tool_confirmation', $this->requireStringValue(
+            $interrupt,
+            'reason',
+            'Expected interrupt string fields.',
+        ));
+        static::assertSame('About to write /x', $this->requireStringValue(
+            $interrupt,
+            'message',
+            'Expected interrupt string fields.',
+        ));
+        static::assertSame('call-9', $this->requireStringValue(
+            $interrupt,
+            'toolCallId',
+            'Expected interrupt string fields.',
+        ));
     }
 
+    /** @throws RuntimeException */
     public function testAgentEventErrorBecomesRunErrorAndTerminates(): void
     {
         $registry = new ToolCallRegistry();
@@ -121,20 +143,31 @@ final class AgUiAdapterTest extends TestCase
             $registry,
         ));
 
+        static::assertCount(5, $events);
+        if (!array_key_exists(4, $events)) {
+            throw new RuntimeException('Expected 5 events.');
+        }
+
         static::assertInstanceOf(RunStarted::class, $events[0]);
         static::assertInstanceOf(TextMessageStart::class, $events[1]);
         static::assertInstanceOf(TextMessageContent::class, $events[2]);
         static::assertInstanceOf(TextMessageEnd::class, $events[3]);
         static::assertInstanceOf(RunError::class, $events[4]);
-        static::assertCount(5, $events);
 
         static::assertSame('Internal agent error.', $events[4]->message);
         static::assertSame('AGENT_ERROR', $events[4]->code);
         static::assertNotEmpty($logger->entries);
-        static::assertStringContainsString(
-            'Max iterations reached',
-            (string) $logger->entries[0]['context']['message'],
-        );
+
+        if (!array_key_exists(0, $logger->entries)) {
+            throw new RuntimeException('Expected a log entry.');
+        }
+
+        $firstEntry = $logger->entries[0];
+        static::assertStringContainsString('Max iterations reached', $this->requireStringValue(
+            $firstEntry['context'],
+            'message',
+            'Expected a "message" context entry.',
+        ));
     }
 
     /** @throws RuntimeException */
@@ -154,6 +187,10 @@ final class AgUiAdapterTest extends TestCase
 
         $events = $this->collect($adapter->run($throwing, 't', 'r', $registry));
 
+        if (!array_key_exists(4, $events)) {
+            throw new RuntimeException('Expected at least 5 events.');
+        }
+
         static::assertInstanceOf(RunStarted::class, $events[0]);
         static::assertInstanceOf(TextMessageStart::class, $events[1]);
         static::assertInstanceOf(TextMessageContent::class, $events[2]);
@@ -163,7 +200,61 @@ final class AgUiAdapterTest extends TestCase
         static::assertSame('AGENT_ERROR', $events[4]->code);
 
         static::assertCount(1, $logger->entries);
-        static::assertInstanceOf(RuntimeException::class, $logger->entries[0]['context']['exception']);
+
+        if (!array_key_exists(0, $logger->entries)) {
+            throw new RuntimeException('Expected a log entry.');
+        }
+
+        $firstEntry = $logger->entries[0];
+        static::assertInstanceOf(RuntimeException::class, $this->requireKey(
+            $firstEntry['context'],
+            'exception',
+            'Expected an "exception" context entry.',
+        ));
+    }
+
+    /**
+     * @param array<array-key, mixed> $array
+     *
+     * @return array<array-key, mixed>
+     *
+     * @throws RuntimeException
+     */
+    private function requireArrayValue(array $array, int|string $key, string $message): array
+    {
+        if (!array_key_exists($key, $array) || !is_array($array[$key])) {
+            throw new RuntimeException($message);
+        }
+
+        return $array[$key];
+    }
+
+    /**
+     * @param array<array-key, mixed> $array
+     *
+     * @throws RuntimeException
+     */
+    private function requireStringValue(array $array, int|string $key, string $message): string
+    {
+        if (!array_key_exists($key, $array) || !is_string($array[$key])) {
+            throw new RuntimeException($message);
+        }
+
+        return $array[$key];
+    }
+
+    /**
+     * @param array<array-key, mixed> $array
+     *
+     * @throws RuntimeException
+     */
+    private function requireKey(array $array, int|string $key, string $message): mixed
+    {
+        if (!array_key_exists($key, $array)) {
+            throw new RuntimeException($message);
+        }
+
+        return $array[$key];
     }
 
     /**

@@ -85,7 +85,7 @@ final class ConversationLog
             return;
         }
 
-        $message = $this->messages[$this->openAssistantIndex];
+        $message = $this->messages[$this->openAssistantIndex] ?? [];
         $message['content'] =
             self::stringOrEmpty($message['content'] ?? null) . self::stringOrEmpty($event['delta'] ?? null);
         $this->messages[$this->openAssistantIndex] = $message;
@@ -139,12 +139,12 @@ final class ConversationLog
         /** @var list<array<string, mixed>> $toolCalls */
         $toolCalls = $this->messages[$this->openAssistantIndex]['toolCalls'] ?? [];
         foreach ($toolCalls as $index => $toolCall) {
-            if ($toolCall['id'] !== $toolCallId) {
+            if (($toolCall['id'] ?? null) !== $toolCallId) {
                 continue;
             }
 
             /** @var array<string, mixed> $function */
-            $function = $toolCall['function'];
+            $function = $toolCall['function'] ?? [];
             $function['arguments'] = self::stringOrEmpty($function['arguments'] ?? null) . $delta;
             $toolCall['function'] = $function;
             $toolCalls[$index] = $toolCall;
@@ -187,13 +187,14 @@ final class ConversationLog
         }
 
         foreach ($toolCalls as $index => $toolCall) {
-            if ($toolCallId !== null && $toolCall['id'] !== $toolCallId) {
+            if ($toolCallId !== null && ($toolCall['id'] ?? null) !== $toolCallId) {
                 continue;
             }
 
             /** @var array<string, mixed> $function */
-            $function = $toolCall['function'];
-            if (self::stringOrEmpty($function['arguments'] ?? null) === '') {
+            $function = $toolCall['function'] ?? [];
+            $arguments = self::stringOrEmpty($function['arguments'] ?? null);
+            if ($arguments === '') {
                 $function['arguments'] = '{}';
                 $toolCall['function'] = $function;
                 $toolCalls[$index] = $toolCall;

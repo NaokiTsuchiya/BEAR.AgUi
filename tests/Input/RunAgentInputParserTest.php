@@ -42,14 +42,14 @@ final class RunAgentInputParserTest extends TestCase
         $input = self::parseOk('Input/full.json');
 
         static::assertSame(['search'], $input->declaredToolNames);
-        $context = $input->context[0];
+        $context = $input->context[0] ?? null;
         static::assertInstanceOf(Context::class, $context);
         static::assertSame('d', $context->description);
         static::assertSame('v', $context->value);
         static::assertSame(['k' => 'v'], $input->state);
         static::assertSame(['a' => 1], $input->forwardedProps);
         static::assertCount(1, $input->resume);
-        $resume = $input->resume[0];
+        $resume = $input->resume[0] ?? null;
         static::assertInstanceOf(Resume::class, $resume);
         static::assertSame('i-1', $resume->interruptId);
         static::assertSame('resolved', $resume->status);
@@ -73,7 +73,7 @@ final class RunAgentInputParserTest extends TestCase
         $result = (new RunAgentInputParser())->parse('"not an object"');
 
         static::assertFalse($result->isOk());
-        $error = $result->unwrapErr()[0];
+        $error = $result->unwrapErr()[0] ?? null;
         static::assertInstanceOf(ParseError::class, $error);
         static::assertStringContainsString('must be a JSON object', $error->message);
     }
@@ -83,7 +83,7 @@ final class RunAgentInputParserTest extends TestCase
         $result = (new RunAgentInputParser())->parse('{not json');
 
         static::assertFalse($result->isOk());
-        $error = $result->unwrapErr()[0];
+        $error = $result->unwrapErr()[0] ?? null;
         static::assertInstanceOf(ParseError::class, $error);
         static::assertStringStartsWith('Invalid JSON', $error->message);
     }
@@ -298,7 +298,7 @@ final class RunAgentInputParserTest extends TestCase
     /** @throws RuntimeException */
     private static function firstError(string $fixture): ParseError
     {
-        $error = self::errors($fixture)[0];
+        $error = self::errors($fixture)[0] ?? null;
         static::assertInstanceOf(ParseError::class, $error);
 
         return $error;
