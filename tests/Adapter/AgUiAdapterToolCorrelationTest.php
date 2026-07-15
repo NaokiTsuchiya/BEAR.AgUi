@@ -21,7 +21,6 @@ use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallRegistry;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
-use RuntimeException;
 
 /**
  * Tool-call start↔result correlation through the adapter: registry data
@@ -30,7 +29,6 @@ use RuntimeException;
 #[CoversClass(AgUiAdapter::class)]
 final class AgUiAdapterToolCorrelationTest extends TestCase
 {
-    /** @throws RuntimeException */
     public function testSingleToolCallEmitsStartArgsEndResultWithRealRegistryData(): void
     {
         $registry = new ToolCallRegistry();
@@ -52,7 +50,7 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
         ));
 
         if (!array_key_exists(4, $events)) {
-            throw new RuntimeException('Expected at least 5 events.');
+            static::fail('Expected at least 5 events.');
         }
 
         static::assertInstanceOf(RunStarted::class, $events[0]);
@@ -70,7 +68,6 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
         static::assertSame('hits', $events[4]->content);
     }
 
-    /** @throws RuntimeException */
     public function testParallelToolsAreCorrelatedFromRegistryInStartOrder(): void
     {
         $registry = new ToolCallRegistry();
@@ -97,7 +94,7 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
         ));
 
         if (!array_key_exists(8, $events)) {
-            throw new RuntimeException('Expected at least 9 events.');
+            static::fail('Expected at least 9 events.');
         }
 
         // Lifecycle: RunStarted, 2× ToolCallStart, 2× (Args, End, Result), RunFinished
@@ -123,7 +120,6 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
         static::assertSame('call-2', $events[8]->toolCallId);
     }
 
-    /** @throws RuntimeException */
     public function testParallelToolResultsArrivingOutOfStartOrderPairById(): void
     {
         // D29: with concurrent dispatch, results for different tools may be
@@ -153,7 +149,7 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
         ));
 
         if (!array_key_exists(8, $events)) {
-            throw new RuntimeException('Expected at least 9 events.');
+            static::fail('Expected at least 9 events.');
         }
 
         static::assertInstanceOf(ToolCallStart::class, $events[1]);
@@ -178,7 +174,6 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
         static::assertSame('A', $events[8]->content);
     }
 
-    /** @throws RuntimeException */
     public function testSameNameToolCallsPairInStartOrder(): void
     {
         // Two calls to the same tool in one turn: within a name the agent
@@ -205,7 +200,7 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
         ));
 
         if (!array_key_exists(6, $events)) {
-            throw new RuntimeException('Expected at least 7 events.');
+            static::fail('Expected at least 7 events.');
         }
 
         static::assertInstanceOf(ToolCallStart::class, $events[1]);
@@ -220,7 +215,6 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
         static::assertSame('second', $events[6]->content);
     }
 
-    /** @throws RuntimeException */
     public function testToolResultWithoutRegistryFallsBackToEmptyContent(): void
     {
         $registry = new ToolCallRegistry();
@@ -241,7 +235,7 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
         ));
 
         if (!array_key_exists(4, $events)) {
-            throw new RuntimeException('Expected at least 5 events.');
+            static::fail('Expected at least 5 events.');
         }
 
         static::assertInstanceOf(ToolCallEnd::class, $events[2]);
@@ -253,7 +247,6 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
         static::assertInstanceOf(\NaokiTsuchiya\BEARAgUi\Event\RunFinished::class, $events[4]);
     }
 
-    /** @throws RuntimeException */
     public function testToolStartClosesOpenTextMessage(): void
     {
         $registry = new ToolCallRegistry();
@@ -275,7 +268,7 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
         ));
 
         if (!array_key_exists(4, $events)) {
-            throw new RuntimeException('Expected at least 5 events.');
+            static::fail('Expected at least 5 events.');
         }
 
         static::assertInstanceOf(TextMessageStart::class, $events[1]);

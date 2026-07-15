@@ -33,7 +33,6 @@ use const JSON_THROW_ON_ERROR;
 #[CoversClass(AgUiAdapter::class)]
 final class AgUiAdapterTest extends TestCase
 {
-    /** @throws RuntimeException */
     public function testTextDeltaWrappedByStartAndEndAroundRun(): void
     {
         $registry = new ToolCallRegistry();
@@ -52,7 +51,7 @@ final class AgUiAdapterTest extends TestCase
 
         static::assertCount(6, $events);
         if (!array_key_exists(5, $events)) {
-            throw new RuntimeException('Expected 6 events.');
+            static::fail('Expected 6 events.');
         }
 
         static::assertInstanceOf(RunStarted::class, $events[0]);
@@ -70,7 +69,6 @@ final class AgUiAdapterTest extends TestCase
         static::assertSame(' there', $events[3]->delta);
     }
 
-    /** @throws RuntimeException */
     public function testConfirmationRequiredTerminatesRunWithInterruptOutcome(): void
     {
         $registry = new ToolCallRegistry();
@@ -90,7 +88,7 @@ final class AgUiAdapterTest extends TestCase
 
         static::assertCount(2, $events);
         if (!array_key_exists(1, $events)) {
-            throw new RuntimeException('Expected 2 events.');
+            static::fail('Expected 2 events.');
         }
 
         static::assertInstanceOf(RunStarted::class, $events[0]);
@@ -125,7 +123,6 @@ final class AgUiAdapterTest extends TestCase
         ));
     }
 
-    /** @throws RuntimeException */
     public function testAgentEventErrorBecomesRunErrorAndTerminates(): void
     {
         $registry = new ToolCallRegistry();
@@ -145,7 +142,7 @@ final class AgUiAdapterTest extends TestCase
 
         static::assertCount(5, $events);
         if (!array_key_exists(4, $events)) {
-            throw new RuntimeException('Expected 5 events.');
+            static::fail('Expected 5 events.');
         }
 
         static::assertInstanceOf(RunStarted::class, $events[0]);
@@ -159,7 +156,7 @@ final class AgUiAdapterTest extends TestCase
         static::assertNotEmpty($logger->entries);
 
         if (!array_key_exists(0, $logger->entries)) {
-            throw new RuntimeException('Expected a log entry.');
+            static::fail('Expected a log entry.');
         }
 
         $firstEntry = $logger->entries[0];
@@ -188,7 +185,7 @@ final class AgUiAdapterTest extends TestCase
         $events = $this->collect($adapter->run($throwing, 't', 'r', $registry));
 
         if (!array_key_exists(4, $events)) {
-            throw new RuntimeException('Expected at least 5 events.');
+            static::fail('Expected at least 5 events.');
         }
 
         static::assertInstanceOf(RunStarted::class, $events[0]);
@@ -202,7 +199,7 @@ final class AgUiAdapterTest extends TestCase
         static::assertCount(1, $logger->entries);
 
         if (!array_key_exists(0, $logger->entries)) {
-            throw new RuntimeException('Expected a log entry.');
+            static::fail('Expected a log entry.');
         }
 
         $firstEntry = $logger->entries[0];
@@ -217,41 +214,31 @@ final class AgUiAdapterTest extends TestCase
      * @param array<array-key, mixed> $array
      *
      * @return array<array-key, mixed>
-     *
-     * @throws RuntimeException
      */
     private function requireArrayValue(array $array, int|string $key, string $message): array
     {
         if (!array_key_exists($key, $array) || !is_array($array[$key])) {
-            throw new RuntimeException($message);
+            static::fail($message);
         }
 
         return $array[$key];
     }
 
-    /**
-     * @param array<array-key, mixed> $array
-     *
-     * @throws RuntimeException
-     */
+    /** @param array<array-key, mixed> $array */
     private function requireStringValue(array $array, int|string $key, string $message): string
     {
         if (!array_key_exists($key, $array) || !is_string($array[$key])) {
-            throw new RuntimeException($message);
+            static::fail($message);
         }
 
         return $array[$key];
     }
 
-    /**
-     * @param array<array-key, mixed> $array
-     *
-     * @throws RuntimeException
-     */
+    /** @param array<array-key, mixed> $array */
     private function requireKey(array $array, int|string $key, string $message): mixed
     {
         if (!array_key_exists($key, $array)) {
-            throw new RuntimeException($message);
+            static::fail($message);
         }
 
         return $array[$key];
