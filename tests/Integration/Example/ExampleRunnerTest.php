@@ -25,10 +25,15 @@ use Psr\Log\NullLogger;
 use RuntimeException;
 
 use function array_column;
+use function array_key_exists;
 use function array_key_last;
+use function array_keys;
 use function array_map;
 use function array_slice;
+use function is_array;
+use function is_string;
 use function json_decode;
+use function sprintf;
 use function substr;
 
 use const JSON_THROW_ON_ERROR;
@@ -71,7 +76,7 @@ final class ExampleRunnerTest extends TestCase
         $errors = self::host(JsonFixture::load('Input/minimal.json'), self::runner($llm, new FakeDispatcher()), $sink);
 
         static::assertSame([], $errors);
-        static::assertSame('text/event-stream', $sink->headers['Content-Type']);
+        static::assertSame('text/event-stream', $sink->headers['Content-Type'] ?? null);
         static::assertSame(
             ['RUN_STARTED', 'TEXT_MESSAGE_START', 'TEXT_MESSAGE_CONTENT', 'TEXT_MESSAGE_END', 'RUN_FINISHED'],
             self::types($sink),
@@ -80,13 +85,14 @@ final class ExampleRunnerTest extends TestCase
         // Run correlation comes from the parsed wire body, and the terminal
         // frame carries the success outcome.
         $events = self::decode($sink);
-        static::assertSame('t-1', $events[0]['threadId']);
-        static::assertSame('r-1', $events[0]['runId']);
+        $firstEvent = self::arrayField($events, 0);
+        static::assertSame('t-1', self::stringField($firstEvent, 'threadId'));
+        static::assertSame('r-1', self::stringField($firstEvent, 'runId'));
         $lastEventKey = array_key_last($events);
         static::assertNotNull($lastEventKey);
-        $outcome = $events[$lastEventKey]['outcome'];
-        static::assertIsArray($outcome);
-        static::assertSame('success', $outcome['type']);
+        $lastEvent = self::arrayField($events, $lastEventKey);
+        $outcome = self::arrayField($lastEvent, 'outcome');
+        static::assertSame('success', self::stringField($outcome, 'type'));
     }
 
     /** @throws RuntimeException */
@@ -141,16 +147,19 @@ final class ExampleRunnerTest extends TestCase
 
         // The whole tool exchange is correlated by the LLM-issued call id.
         $events = self::decode($sink);
-        static::assertSame(GetTimeTool::NAME, $events[4]['toolCallName']);
+        static::assertSame(GetTimeTool::NAME, self::stringField(self::arrayField($events, 4), 'toolCallName'));
         static::assertSame(
             ['call-1', 'call-1', 'call-1', 'call-1'],
             array_column(self::slice($events, 4, 4), 'toolCallId'),
         );
-        static::assertSame('{"timezone":"UTC"}', $events[5]['delta']);
-        static::assertSame('2026-07-08T09:00:00+00:00', $events[7]['content']);
+        static::assertSame('{"timezone":"UTC"}', self::stringField(self::arrayField($events, 5), 'delta'));
+        static::assertSame('2026-07-08T09:00:00+00:00', self::stringField(self::arrayField($events, 7), 'content'));
 
         // The post-tool text opens a NEW assistant message (D9/D10).
-        static::assertNotSame($events[1]['messageId'], $events[8]['messageId']);
+        static::assertNotSame(
+            self::stringField(self::arrayField($events, 1), 'messageId'),
+            self::stringField(self::arrayField($events, 8), 'messageId'),
+        );
     }
 
     /** @throws RuntimeException */
@@ -175,17 +184,14 @@ final class ExampleRunnerTest extends TestCase
         $events = self::decode($sink);
         $lastEventKey = array_key_last($events);
         static::assertNotNull($lastEventKey);
-        $finished = $events[$lastEventKey];
-        $outcome = $finished['outcome'];
-        static::assertIsArray($outcome);
-        static::assertSame('interrupt', $outcome['type']);
+        $finished = self::arrayField($events, $lastEventKey);
+        $outcome = self::arrayField($finished, 'outcome');
+        static::assertSame('interrupt', self::stringField($outcome, 'type'));
 
-        $interrupts = $outcome['interrupts'];
-        static::assertIsArray($interrupts);
-        $interrupt = $interrupts[0];
-        static::assertIsArray($interrupt);
-        static::assertSame('tool_confirmation', $interrupt['reason']);
-        static::assertSame('call-9', $interrupt['toolCallId']);
+        $interrupts = self::arrayField($outcome, 'interrupts');
+        $interrupt = self::arrayField($interrupts, 0);
+        static::assertSame('tool_confirmation', self::stringField($interrupt, 'reason'));
+        static::assertSame('call-9', self::stringField($interrupt, 'toolCallId'));
         static::assertCount(0, $dispatcher->calls);
     }
 
@@ -206,8 +212,9 @@ final class ExampleRunnerTest extends TestCase
         static::assertSame(['RUN_STARTED', 'RUN_ERROR'], self::types($sink));
 
         $events = self::decode($sink);
-        static::assertSame('Internal agent error.', $events[1]['message']);
-        static::assertSame('AGENT_ERROR', $events[1]['code']);
+        $errorEvent = self::arrayField($events, 1);
+        static::assertSame('Internal agent error.', self::stringField($errorEvent, 'message'));
+        static::assertSame('AGENT_ERROR', self::stringField($errorEvent, 'code'));
     }
 
     /** @throws RuntimeException */
@@ -254,7 +261,8 @@ final class ExampleRunnerTest extends TestCase
     private static function host(string $body, AgUiRunner $runner, RecordingSink $sink): array
     {
         $parsed = (new RunAgentInputParser())->parse($body);
-        if (!$parsed->isOk()) {
+        $isOk = $parsed->isOk();
+        if (!$isOk) {
             return $parsed->unwrapErr();
         }
 
@@ -298,16 +306,62 @@ final class ExampleRunnerTest extends TestCase
      */
     private static function decodeFrame(string $frame): array
     {
-        $decoded = json_decode(substr($frame, 6, -2), true, 512, JSON_THROW_ON_ERROR);
-        static::assertIsArray($decoded);
+        $decoded = self::decodeJsonObject(substr($frame, 6, -2));
 
-        $payload = [];
-        foreach ($decoded as $key => $value) {
+        foreach (array_keys($decoded) as $key) {
             static::assertIsString($key);
-            $payload[$key] = $value;
         }
 
-        return $payload;
+        /** @var array<string, mixed> $decoded */
+        return $decoded;
+    }
+
+    /**
+     * Decodes a JSON object, declaring the type the fixtures are contracted
+     * to produce and re-checking that promise immediately afterward, rather
+     * than trusting the blind `(array)` cast on `json_decode()`'s `mixed`.
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function decodeJsonObject(string $json): array
+    {
+        /** @var array<array-key, mixed> $decoded */
+        $decoded = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        static::assertIsArray($decoded);
+
+        return $decoded;
+    }
+
+    /**
+     * Fetches an array field, failing loudly rather than returning a
+     * possibly-undefined or possibly-`null` value.
+     *
+     * @param array<array-key, mixed> $container
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function arrayField(array $container, int|string $key): array
+    {
+        if (!array_key_exists($key, $container) || !is_array($container[$key])) {
+            static::fail(sprintf('Expected an array at key "%s".', (string) $key));
+        }
+
+        return $container[$key];
+    }
+
+    /**
+     * Fetches a string field, failing loudly rather than returning a
+     * possibly-undefined or possibly-`null` value.
+     *
+     * @param array<array-key, mixed> $container
+     */
+    private static function stringField(array $container, int|string $key): string
+    {
+        if (!array_key_exists($key, $container) || !is_string($container[$key])) {
+            static::fail(sprintf('Expected a string at key "%s".', (string) $key));
+        }
+
+        return $container[$key];
     }
 
     /** @return list<string> */

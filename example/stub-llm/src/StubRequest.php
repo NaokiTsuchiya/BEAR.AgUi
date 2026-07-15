@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace Example\StubLlm;
 
-use function array_filter;
 use function array_reverse;
-use function array_values;
 use function implode;
-use function is_array;
 use function is_string;
 use function json_encode;
 use function str_starts_with;
@@ -41,20 +38,15 @@ final readonly class StubRequest
      */
     public static function messages(array $requestBody): array
     {
-        $messages = $requestBody['messages'] ?? null;
-        if (!is_array($messages)) {
-            return [];
-        }
-
-        /** @var list<array<string, mixed>> OpenAI wire messages are JSON objects */
-        return array_values(array_filter($messages, is_array(...)));
+        return Wire::messages($requestBody['messages'] ?? null);
     }
 
     /** @param list<array<string, mixed>> $messages */
     public static function isToolTurn(array $messages): bool
     {
         foreach (array_reverse($messages) as $message) {
-            if (self::isAlpsContext($message)) {
+            $isAlpsContext = self::isAlpsContext($message);
+            if ($isAlpsContext) {
                 continue;
             }
 
@@ -74,7 +66,8 @@ final readonly class StubRequest
     {
         $contents = [];
         foreach (array_reverse($messages) as $message) {
-            if (self::isAlpsContext($message)) {
+            $isAlpsContext = self::isAlpsContext($message);
+            if ($isAlpsContext) {
                 continue;
             }
 
@@ -82,10 +75,7 @@ final readonly class StubRequest
                 break;
             }
 
-            $content = $message['content'] ?? '';
-            $contents[] = is_string($content)
-                ? $content
-                : json_encode($content, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $contents[] = self::stringifyContent($message['content'] ?? null);
         }
 
         return implode(' | ', array_reverse($contents));
@@ -94,12 +84,17 @@ final readonly class StubRequest
     /** @param array<string, mixed> $message */
     private static function isAlpsContext(array $message): bool
     {
-        $content = $message['content'] ?? null;
+        $content = Wire::nullableString($message['content'] ?? null);
 
-        return (
-            ($message['role'] ?? null) === 'user'
-            && is_string($content)
-            && str_starts_with($content, self::ALPS_CONTEXT_HEADING)
-        );
+        return ($message['role'] ?? null) === 'user'
+        && $content !== null
+        && str_starts_with($content, self::ALPS_CONTEXT_HEADING);
+    }
+
+    private static function stringifyContent(mixed $content): string
+    {
+        return is_string($content)
+            ? $content
+            : json_encode($content, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 }

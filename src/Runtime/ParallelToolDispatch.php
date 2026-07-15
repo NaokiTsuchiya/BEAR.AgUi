@@ -52,12 +52,14 @@ final readonly class ParallelToolDispatch
 
         foreach ($pendingToolCalls as $index => $pending) {
             $toolCall = $this->toToolCall($pending);
-            if (!$toolList->has($toolCall->name)) {
+            $isKnownTool = $toolList->has($toolCall->name);
+            if (!$isKnownTool) {
                 $results[$index] = ToolResult::error($toolCall->id, 'Tool is not enabled: ' . $toolCall->name);
                 continue;
             }
 
-            if ($toolList->isConfirmable($toolCall->name)) {
+            $isConfirmable = $toolList->isConfirmable($toolCall->name);
+            if ($isConfirmable) {
                 $approved = yield AgentEvent::confirmationRequired(
                     $toolCall->name,
                     $toolCall->id,
@@ -112,6 +114,7 @@ final readonly class ParallelToolDispatch
 
     private function toToolCall(PendingToolCall $pending): ToolCall
     {
+        /** @var mixed $decoded */
         $decoded = json_decode($pending->inputJson, true);
 
         /** @var array<string, mixed> $input */

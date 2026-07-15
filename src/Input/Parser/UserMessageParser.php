@@ -10,6 +10,7 @@ use NaokiTsuchiya\BEARAgUi\Input\ParseError;
 use NaokiTsuchiya\BEARAgUi\Input\Result;
 
 use function array_key_exists;
+use function array_walk;
 use function implode;
 use function is_array;
 use function is_string;
@@ -45,38 +46,37 @@ final class UserMessageParser implements MessageVariantParser
             return Result::err([new ParseError('content is required')]);
         }
 
-        $content = $data['content'];
-        if (is_string($content)) {
-            return Result::ok(new UserMessage($id, $content));
+        if (is_string($data['content'])) {
+            return Result::ok(new UserMessage($id, $data['content']));
         }
 
-        if (!is_array($content)) {
+        if (!is_array($data['content'])) {
             return Result::err([new ParseError('content must be a string or InputContent[]')]);
         }
 
-        return Result::ok(new UserMessage($id, self::projectText($content)));
+        return Result::ok(new UserMessage($id, self::projectText($data['content'])));
     }
 
     /** @param array<array-key, mixed> $parts */
     private static function projectText(array $parts): string
     {
         $texts = [];
-        foreach ($parts as $part) {
+        array_walk($parts, static function (mixed $part) use (&$texts): void {
             if (!is_array($part)) {
-                continue;
+                return;
             }
 
             if (($part['type'] ?? null) !== 'text') {
-                continue;
+                return;
             }
 
             $text = Coerce::nullableString($part['text'] ?? null);
             if ($text === null || $text === '') {
-                continue;
+                return;
             }
 
             $texts[] = $text;
-        }
+        });
 
         return implode("\n", $texts);
     }

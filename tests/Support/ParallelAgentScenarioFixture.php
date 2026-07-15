@@ -36,16 +36,19 @@ trait ParallelAgentScenarioFixture
     private function drive(Generator $stream, bool $approval): array
     {
         $events = [];
-        while ($stream->valid()) {
+        $valid = $stream->valid();
+        while ($valid) {
             $event = $stream->current();
             Assert::assertInstanceOf(AgentEvent::class, $event);
             $events[] = $event;
             if ($event->type === AgentEvent::CONFIRMATION_REQUIRED) {
                 $stream->send($approval);
+                $valid = $stream->valid();
                 continue;
             }
 
             $stream->next();
+            $valid = $stream->valid();
         }
 
         return $events;

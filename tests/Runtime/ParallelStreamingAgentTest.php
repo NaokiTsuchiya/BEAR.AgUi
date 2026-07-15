@@ -68,27 +68,25 @@ final class ParallelStreamingAgentTest extends TestCase
             );
 
             // tool_result events come in pending (wire) order even though
-            // completion order under the scheduler is arbitrary.
-            $toolResultEvent4 = $events[4];
-            $toolResultEvent5 = $events[5];
-            $toolResultEvent6 = $events[6];
-            self::assertNotNull($toolResultEvent4);
-            self::assertNotNull($toolResultEvent5);
-            self::assertNotNull($toolResultEvent6);
+            // completion order under the scheduler is arbitrary. Narrow
+            // once via a local closure instead of repeating the existence
+            // guard at each index.
+            $toolNameAt = static function (int $index) use ($events): mixed {
+                $event = $events[$index] ?? null;
+                self::assertNotNull($event);
+
+                return $event->data['toolName'] ?? null;
+            };
+
             static::assertSame(['alpha', 'beta', 'gamma'], [
-                $toolResultEvent4->data['toolName'],
-                $toolResultEvent5->data['toolName'],
-                $toolResultEvent6->data['toolName'],
+                $toolNameAt(4),
+                $toolNameAt(5),
+                $toolNameAt(6),
             ]);
 
             // Tool results are fed back to the LLM in pending order.
-            $resultMessage = $agent->messages[2];
-            self::assertNotNull($resultMessage);
-            $toolResults = $resultMessage->content;
-            static::assertSame(
-                ['call-a', 'call-b', 'call-c'],
-                array_map(static fn(array $block): mixed => $block['tool_use_id'], $toolResults),
-            );
+            $toolResults = $this->toolResultsContent($agent);
+            static::assertSame(['call-a', 'call-b', 'call-c'], array_map($this->toolUseId(...), $toolResults));
         });
     }
 
@@ -148,12 +146,12 @@ final class ParallelStreamingAgentTest extends TestCase
             // Denied tool is never dispatched; the plain one still runs.
             static::assertSame(['alpha'], $probe->dispatchedNames);
 
-            $resultMessage = $agent->messages[2];
-            self::assertNotNull($resultMessage);
-            $toolResults = $resultMessage->content;
-            static::assertFalse($toolResults[0]['is_error']);
-            static::assertTrue($toolResults[1]['is_error']);
-            static::assertSame('User cancelled this operation.', $toolResults[1]['content']);
+            $toolResults = $this->toolResultsContent($agent);
+            $toolResult0 = $this->toolResultBlock($toolResults, 0);
+            $toolResult1 = $this->toolResultBlock($toolResults, 1);
+            static::assertFalse($toolResult0['is_error'] ?? null);
+            static::assertTrue($toolResult1['is_error'] ?? null);
+            static::assertSame('User cancelled this operation.', $toolResult1['content'] ?? null);
         });
     }
 
@@ -186,13 +184,8 @@ final class ParallelStreamingAgentTest extends TestCase
             // Results and result events stay in pending order.
             static::assertSame(['alpha', 'danger'], $this->toolResultNames($events));
 
-            $resultMessage = $agent->messages[2];
-            self::assertNotNull($resultMessage);
-            $toolResults = $resultMessage->content;
-            static::assertSame(
-                ['call-a', 'call-d'],
-                array_map(static fn(array $block): mixed => $block['tool_use_id'], $toolResults),
-            );
+            $toolResults = $this->toolResultsContent($agent);
+            static::assertSame(['call-a', 'call-d'], array_map($this->toolUseId(...), $toolResults));
         });
     }
 
@@ -216,12 +209,12 @@ final class ParallelStreamingAgentTest extends TestCase
 
             static::assertSame(['ghost', 'alpha'], $this->toolResultNames($events));
 
-            $resultMessage = $agent->messages[2];
-            self::assertNotNull($resultMessage);
-            $toolResults = $resultMessage->content;
-            static::assertTrue($toolResults[0]['is_error']);
-            static::assertSame('Tool is not enabled: ghost', $toolResults[0]['content']);
-            static::assertFalse($toolResults[1]['is_error']);
+            $toolResults = $this->toolResultsContent($agent);
+            $toolResult0 = $this->toolResultBlock($toolResults, 0);
+            $toolResult1 = $this->toolResultBlock($toolResults, 1);
+            static::assertTrue($toolResult0['is_error'] ?? null);
+            static::assertSame('Tool is not enabled: ghost', $toolResult0['content'] ?? null);
+            static::assertFalse($toolResult1['is_error'] ?? null);
         });
     }
 
@@ -240,11 +233,10 @@ final class ParallelStreamingAgentTest extends TestCase
 
             iterator_to_array($agent->runStream('go'), false);
 
-            $resultMessage = $agent->messages[2];
-            self::assertNotNull($resultMessage);
-            $toolResults = $resultMessage->content;
-            static::assertTrue($toolResults[0]['is_error']);
-            static::assertSame('RuntimeException: boom', $toolResults[0]['content']);
+            $toolResults = $this->toolResultsContent($agent);
+            $toolResult0 = $this->toolResultBlock($toolResults, 0);
+            static::assertTrue($toolResult0['is_error'] ?? null);
+            static::assertSame('RuntimeException: boom', $toolResult0['content'] ?? null);
         });
     }
 
@@ -262,5 +254,38 @@ final class ParallelStreamingAgentTest extends TestCase
             $agent->reset();
             static::assertSame([], $agent->messages);
         });
+    }
+
+    /** @param array<string, mixed> $block */
+    private function toolUseId(array $block): mixed
+    {
+        return $block['tool_use_id'] ?? null;
+    }
+
+    /**
+     * The tool_result message the agent fed back to the LLM (always index 2:
+     * user prompt, assistant tool_use turn, then this).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function toolResultsContent(ParallelStreamingAgent $agent): array
+    {
+        $message = $agent->messages[2] ?? null;
+        self::assertNotNull($message);
+
+        return $message->content;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $content
+     *
+     * @return array<string, mixed>
+     */
+    private function toolResultBlock(array $content, int $index): array
+    {
+        $block = $content[$index] ?? null;
+        self::assertNotNull($block);
+
+        return $block;
     }
 }

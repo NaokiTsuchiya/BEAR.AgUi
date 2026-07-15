@@ -8,6 +8,8 @@ use Example\CliClient\ConversationLog;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+use function is_array;
+
 #[CoversClass(ConversationLog::class)]
 final class ConversationLogTest extends TestCase
 {
@@ -22,12 +24,15 @@ final class ConversationLogTest extends TestCase
         $log->observe(['type' => 'TEXT_MESSAGE_END', 'messageId' => 'm-1']);
         $log->observe(['type' => 'RUN_FINISHED', 'threadId' => 't-1', 'runId' => 'r-1']);
 
+        $messages = $log->toMessages();
+        $firstMessage = self::messageAt($messages, 0);
+
         static::assertSame(
             [
-                ['id' => $log->toMessages()[0]['id'], 'role' => 'user', 'content' => 'Hello'],
+                ['id' => self::field($firstMessage, 'id'), 'role' => 'user', 'content' => 'Hello'],
                 ['id' => 'm-1', 'role' => 'assistant', 'content' => 'Hi there'],
             ],
-            $log->toMessages(),
+            $messages,
         );
     }
 
@@ -49,11 +54,14 @@ final class ConversationLogTest extends TestCase
         $log->observe(['type' => 'RUN_FINISHED', 'threadId' => 't-1', 'runId' => 'r-1']);
 
         $messages = $log->toMessages();
+        $firstMessage = self::messageAt($messages, 0);
+        $secondMessage = self::messageAt($messages, 1);
+        $thirdMessage = self::messageAt($messages, 2);
 
-        static::assertSame('user', $messages[0]['role']);
+        static::assertSame('user', self::field($firstMessage, 'role'));
         static::assertSame(
             [
-                'id' => $messages[1]['id'],
+                'id' => self::field($secondMessage, 'id'),
                 'role' => 'assistant',
                 'content' => '',
                 'toolCalls' => [
@@ -64,11 +72,11 @@ final class ConversationLogTest extends TestCase
                     ],
                 ],
             ],
-            $messages[1],
+            $secondMessage,
         );
         static::assertSame(
             ['id' => 'm-2', 'role' => 'tool', 'content' => 'Sunny', 'toolCallId' => 'tc-1'],
-            $messages[2],
+            $thirdMessage,
         );
     }
 
@@ -98,6 +106,9 @@ final class ConversationLogTest extends TestCase
         $log->observe(['type' => 'RUN_FINISHED', 'threadId' => 't-1', 'runId' => 'r-1']);
 
         $messages = $log->toMessages();
+        $secondMessage = self::messageAt($messages, 1);
+        $thirdMessage = self::messageAt($messages, 2);
+        $fourthMessage = self::messageAt($messages, 3);
 
         static::assertSame(
             [
@@ -108,12 +119,12 @@ final class ConversationLogTest extends TestCase
                 ],
                 ['id' => 'tc-news', 'type' => 'function', 'function' => ['name' => 'news_get', 'arguments' => '{}']],
             ],
-            $messages[1]['toolCalls'],
+            self::field($secondMessage, 'toolCalls'),
         );
-        static::assertSame('tool', $messages[2]['role']);
-        static::assertSame('tc-weather', $messages[2]['toolCallId']);
-        static::assertSame('tool', $messages[3]['role']);
-        static::assertSame('tc-news', $messages[3]['toolCallId']);
+        static::assertSame('tool', self::field($thirdMessage, 'role'));
+        static::assertSame('tc-weather', self::field($thirdMessage, 'toolCallId'));
+        static::assertSame('tool', self::field($fourthMessage, 'role'));
+        static::assertSame('tc-news', self::field($fourthMessage, 'toolCallId'));
     }
 
     public function testSecondTurnCarriesFirstTurnHistory(): void
@@ -134,11 +145,15 @@ final class ConversationLogTest extends TestCase
         $log->observe(['type' => 'RUN_FINISHED']);
 
         $secondTurnMessages = $log->toMessages();
+        $secondTurnFirstMessage = self::messageAt($secondTurnMessages, 0);
+        $secondTurnSecondMessage = self::messageAt($secondTurnMessages, 1);
+        $secondTurnThirdMessage = self::messageAt($secondTurnMessages, 2);
+        $secondTurnFourthMessage = self::messageAt($secondTurnMessages, 3);
 
-        static::assertSame($firstTurnMessages, [$secondTurnMessages[0], $secondTurnMessages[1]]);
-        static::assertSame('user', $secondTurnMessages[2]['role']);
-        static::assertSame('How are you?', $secondTurnMessages[2]['content']);
-        static::assertSame(['id' => 'm-2', 'role' => 'assistant', 'content' => 'Great'], $secondTurnMessages[3]);
+        static::assertSame($firstTurnMessages, [$secondTurnFirstMessage, $secondTurnSecondMessage]);
+        static::assertSame('user', self::field($secondTurnThirdMessage, 'role'));
+        static::assertSame('How are you?', self::field($secondTurnThirdMessage, 'content'));
+        static::assertSame(['id' => 'm-2', 'role' => 'assistant', 'content' => 'Great'], $secondTurnFourthMessage);
     }
 
     public function testToolCallWithNoArgsDeltaDefaultsToEmptyJsonObject(): void
@@ -156,14 +171,15 @@ final class ConversationLogTest extends TestCase
         ]);
 
         $messages = $log->toMessages();
+        $secondMessage = self::messageAt($messages, 1);
 
-        $toolCalls = $messages[1]['toolCalls'];
+        $toolCalls = self::asArray(self::field($secondMessage, 'toolCalls'));
         static::assertIsArray($toolCalls);
-        $toolCall = $toolCalls[0];
+        $toolCall = self::asArray($toolCalls[0] ?? null);
         static::assertIsArray($toolCall);
-        $function = $toolCall['function'];
+        $function = self::asArray(self::field($toolCall, 'function'));
         static::assertIsArray($function);
-        static::assertSame('{}', $function['arguments']);
+        static::assertSame('{}', self::field($function, 'arguments'));
     }
 
     public function testInterruptedRunClosesDanglingToolCallArguments(): void
@@ -177,14 +193,15 @@ final class ConversationLogTest extends TestCase
         $log->observe(['type' => 'RUN_FINISHED', 'threadId' => 't-1', 'runId' => 'r-1', 'outcome' => 'interrupt']);
 
         $messages = $log->toMessages();
+        $secondMessage = self::messageAt($messages, 1);
 
-        $toolCalls = $messages[1]['toolCalls'];
+        $toolCalls = self::asArray(self::field($secondMessage, 'toolCalls'));
         static::assertIsArray($toolCalls);
-        $toolCall = $toolCalls[0];
+        $toolCall = self::asArray($toolCalls[0] ?? null);
         static::assertIsArray($toolCall);
-        $function = $toolCall['function'];
+        $function = self::asArray(self::field($toolCall, 'function'));
         static::assertIsArray($function);
-        static::assertSame('{}', $function['arguments']);
+        static::assertSame('{}', self::field($function, 'arguments'));
     }
 
     public function testEventsWithUnknownTypeAreIgnored(): void
@@ -195,5 +212,27 @@ final class ConversationLogTest extends TestCase
         $log->observe(['type' => 'RUN_STARTED', 'threadId' => 't-1', 'runId' => 'r-1']);
 
         static::assertCount(1, $log->toMessages());
+    }
+
+    /**
+     * @param list<array<string, mixed>> $messages
+     *
+     * @return array<string, mixed>
+     */
+    private static function messageAt(array $messages, int $index): array
+    {
+        return $messages[$index] ?? [];
+    }
+
+    /** @param array<array-key, mixed> $message */
+    private static function field(array $message, int|string $key): mixed
+    {
+        return $message[$key] ?? null;
+    }
+
+    /** @return array<array-key, mixed>|null */
+    private static function asArray(mixed $value): array|null
+    {
+        return is_array($value) ? $value : null;
     }
 }

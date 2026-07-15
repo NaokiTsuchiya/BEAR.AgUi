@@ -49,6 +49,10 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
             $registry,
         ));
 
+        if (!array_key_exists(4, $events)) {
+            static::fail('Expected at least 5 events.');
+        }
+
         static::assertInstanceOf(RunStarted::class, $events[0]);
         static::assertInstanceOf(ToolCallStart::class, $events[1]);
         static::assertInstanceOf(ToolCallArgs::class, $events[2]);
@@ -88,6 +92,10 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
             'r',
             $registry,
         ));
+
+        if (!array_key_exists(8, $events)) {
+            static::fail('Expected at least 9 events.');
+        }
 
         // Lifecycle: RunStarted, 2× ToolCallStart, 2× (Args, End, Result), RunFinished
         static::assertInstanceOf(RunStarted::class, $events[0]);
@@ -140,6 +148,10 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
             $registry,
         ));
 
+        if (!array_key_exists(8, $events)) {
+            static::fail('Expected at least 9 events.');
+        }
+
         static::assertInstanceOf(ToolCallStart::class, $events[1]);
         static::assertInstanceOf(ToolCallStart::class, $events[2]);
         static::assertSame('call-1', $events[1]->toolCallId);
@@ -187,6 +199,10 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
             $registry,
         ));
 
+        if (!array_key_exists(6, $events)) {
+            static::fail('Expected at least 7 events.');
+        }
+
         static::assertInstanceOf(ToolCallStart::class, $events[1]);
         static::assertSame('call-1', $events[1]->toolCallId);
         static::assertInstanceOf(ToolCallStart::class, $events[2]);
@@ -218,6 +234,10 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
             $registry,
         ));
 
+        if (!array_key_exists(4, $events)) {
+            static::fail('Expected at least 5 events.');
+        }
+
         static::assertInstanceOf(ToolCallEnd::class, $events[2]);
         static::assertSame('call-1', $events[2]->toolCallId);
         static::assertInstanceOf(ToolCallResult::class, $events[3]);
@@ -246,6 +266,10 @@ final class AgUiAdapterToolCorrelationTest extends TestCase
             'r',
             $registry,
         ));
+
+        if (!array_key_exists(4, $events)) {
+            static::fail('Expected at least 5 events.');
+        }
 
         static::assertInstanceOf(TextMessageStart::class, $events[1]);
         static::assertInstanceOf(TextMessageContent::class, $events[2]);

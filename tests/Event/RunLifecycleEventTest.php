@@ -47,6 +47,7 @@ final class RunLifecycleEventTest extends TestCase
             metadata: null,
         );
         $event = RunFinished::interrupt('t-1', 'r-1', [$interrupt]);
+        /** @var array<array-key, mixed> $decoded */
         $decoded = json_decode($this->encode($event), true);
         static::assertSame(
             [
@@ -92,6 +93,7 @@ final class RunLifecycleEventTest extends TestCase
             expiresAt: '2026-01-01T00:00:00Z',
             metadata: ['k' => 'v'],
         );
+        /** @var array<array-key, mixed> $decoded */
         $decoded = json_decode(json_encode($interrupt, JSON_THROW_ON_ERROR), true);
         static::assertSame(
             [

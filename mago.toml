@@ -27,7 +27,6 @@ literal-named-argument = { enabled = false }
 halstead = { effort-threshold = 7000 }
 
 [analyzer]
-baseline = "mago-baseline.toml"
 minimum-fail-level = "note"
 plugins = []
 find-unused-definitions = true

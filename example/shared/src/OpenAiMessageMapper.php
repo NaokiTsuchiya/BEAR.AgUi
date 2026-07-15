@@ -77,7 +77,8 @@ final readonly class OpenAiMessageMapper
     {
         $toolMessages = [];
         foreach ($message->content as $content) {
-            if (!$this->block->isType($content, 'tool_result')) {
+            $isToolResult = $this->block->isType($content, 'tool_result');
+            if (!$isToolResult) {
                 continue;
             }
 
@@ -94,7 +95,8 @@ final readonly class OpenAiMessageMapper
 
         $toolCalls = [];
         foreach ($message->content as $content) {
-            if (!$this->block->isType($content, 'tool_use')) {
+            $isToolUse = $this->block->isType($content, 'tool_use');
+            if (!$isToolUse) {
                 continue;
             }
 

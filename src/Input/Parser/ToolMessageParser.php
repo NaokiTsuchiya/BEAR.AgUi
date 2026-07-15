@@ -50,11 +50,9 @@ final class ToolMessageParser implements MessageVariantParser
             return Result::err($errors);
         }
 
-        $content = $data['content'];
-
         $outcome = array_key_exists('error', $data) && $data['error'] !== null
-            ? ToolOutcome::failure($content, Coerce::string($data['error']))
-            : ToolOutcome::success($content);
+            ? ToolOutcome::failure($data['content'] ?? null, Coerce::string($data['error']))
+            : ToolOutcome::success($data['content'] ?? null);
 
         return Result::ok(new ToolMessage($id, $toolCallId, $outcome));
     }

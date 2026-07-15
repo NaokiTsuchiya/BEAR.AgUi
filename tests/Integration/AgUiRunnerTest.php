@@ -13,6 +13,7 @@ use NaokiTsuchiya\BEARAgUi\Adapter\AgUiAdapter;
 use NaokiTsuchiya\BEARAgUi\AgUiRunner;
 use NaokiTsuchiya\BEARAgUi\Fake\FakeDispatcher;
 use NaokiTsuchiya\BEARAgUi\Fake\FakeStreamingLlmClient;
+use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 use NaokiTsuchiya\BEARAgUi\Input\Message\AssistantMessage;
 use NaokiTsuchiya\BEARAgUi\Input\Message\Message;
 use NaokiTsuchiya\BEARAgUi\Input\Message\UserMessage;
@@ -28,8 +29,12 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
 use function array_column;
+use function array_key_exists;
 use function array_map;
+use function is_array;
+use function is_string;
 use function json_decode;
+use function sprintf;
 use function substr;
 
 use const JSON_THROW_ON_ERROR;
@@ -100,18 +105,19 @@ final class AgUiRunnerTest extends TestCase
         self::render(self::runner($llm, new FakeDispatcher(), []), $input, new RecordingSink());
 
         // The agent saw the seeded history followed by the new user turn.
-        $messages = $captured[0];
-        static::assertNotNull($messages);
+        $messages = self::requireIndex($captured, 0, 'the LLM client to capture the seeded history');
         static::assertCount(3, $messages);
-        static::assertNotNull($messages[0]);
-        static::assertNotNull($messages[1]);
-        static::assertNotNull($messages[2]);
-        static::assertSame('user', $messages[0]->role);
-        static::assertSame([['type' => 'text', 'text' => 'first question']], $messages[0]->content);
-        static::assertSame('assistant', $messages[1]->role);
-        static::assertSame([['type' => 'text', 'text' => 'first answer']], $messages[1]->content);
-        static::assertSame('user', $messages[2]->role);
-        static::assertSame([['type' => 'text', 'text' => 'follow up']], $messages[2]->content);
+
+        $first = self::requireIndex($messages, 0, 'the first captured message');
+        $second = self::requireIndex($messages, 1, 'the second captured message');
+        $third = self::requireIndex($messages, 2, 'the third captured message');
+
+        static::assertSame('user', $first->role);
+        static::assertSame([['type' => 'text', 'text' => 'first question']], $first->content);
+        static::assertSame('assistant', $second->role);
+        static::assertSame([['type' => 'text', 'text' => 'first answer']], $second->content);
+        static::assertSame('user', $third->role);
+        static::assertSame([['type' => 'text', 'text' => 'follow up']], $third->content);
     }
 
     public function testDeclaredToolsAreIntersectedWithKnownToolsLeniently(): void
@@ -142,9 +148,10 @@ final class AgUiRunnerTest extends TestCase
         $types = self::types($sink);
         static::assertContains('TOOL_CALL_RESULT', $types);
         static::assertNotContains('RUN_ERROR', $types);
-        $lastTypeKey = array_key_last($types);
-        static::assertNotNull($lastTypeKey);
-        static::assertSame('RUN_FINISHED', $types[$lastTypeKey]);
+        $lastType = end($types);
+        static::assertNotFalse($lastType, 'expected at least one event');
+
+        static::assertSame('RUN_FINISHED', $lastType);
     }
 
     public function testConfirmationRequiredFinishesWithInterruptOutcome(): void
@@ -163,21 +170,19 @@ final class AgUiRunnerTest extends TestCase
         self::render(self::runner($llm, $dispatcher, [self::confirmableTool('writer')]), $input, $sink);
 
         $events = self::decode($sink);
-        $lastEventKey = array_key_last($events);
-        static::assertNotNull($lastEventKey);
-        $finished = $events[$lastEventKey];
-        static::assertSame('RUN_FINISHED', $finished['type']);
+        $finished = end($events);
+        static::assertNotFalse($finished, 'expected a decoded event');
 
-        $outcome = $finished['outcome'];
-        static::assertIsArray($outcome);
-        static::assertSame('interrupt', $outcome['type']);
+        static::assertSame('RUN_FINISHED', self::requireString($finished, 'type', 'the event type'));
 
-        $interrupts = $outcome['interrupts'];
-        static::assertIsArray($interrupts);
-        $interrupt = $interrupts[0];
-        static::assertIsArray($interrupt);
-        static::assertSame('tool_confirmation', $interrupt['reason']);
-        static::assertSame('call-1', $interrupt['toolCallId']);
+        $outcome = self::requireArray($finished, 'outcome', 'the event outcome');
+        static::assertSame('interrupt', self::requireString($outcome, 'type', 'the outcome type'));
+
+        $interrupts = self::requireArray($outcome, 'interrupts', 'the outcome interrupts');
+        $interrupt = self::requireArray($interrupts, 0, 'the first interrupt');
+
+        static::assertSame('tool_confirmation', self::requireString($interrupt, 'reason', 'the interrupt reason'));
+        static::assertSame('call-1', self::requireString($interrupt, 'toolCallId', 'the interrupt toolCallId'));
         static::assertCount(0, $dispatcher->calls);
     }
 
@@ -191,9 +196,10 @@ final class AgUiRunnerTest extends TestCase
         self::render(self::runner(new FakeStreamingLlmClient(), new FakeDispatcher(), []), self::input('hi'), $sink);
 
         $types = self::types($sink);
-        $lastTypeKey = array_key_last($types);
-        static::assertNotNull($lastTypeKey);
-        static::assertSame('RUN_ERROR', $types[$lastTypeKey]);
+        $lastType = end($types);
+        static::assertNotFalse($lastType, 'expected at least one event');
+
+        static::assertSame('RUN_ERROR', $lastType);
     }
 
     /** @param list<SchemaTool> $tools */
@@ -247,18 +253,18 @@ final class AgUiRunnerTest extends TestCase
      */
     private static function decode(RecordingSink $sink): array
     {
-        return array_map(static function (string $frame): array {
-            $decoded = json_decode(substr($frame, 6, -2), true, 512, JSON_THROW_ON_ERROR);
-            self::assertIsArray($decoded);
+        return array_map(self::decodeFrame(...), $sink->frames);
+    }
 
-            $event = [];
-            foreach ($decoded as $key => $value) {
-                self::assertIsString($key);
-                $event[$key] = $value;
-            }
+    /** @return array<string, mixed> */
+    private static function decodeFrame(string $frame): array
+    {
+        $event = Coerce::stringKeyedArray(json_decode(substr($frame, 6, -2), true, 512, JSON_THROW_ON_ERROR));
+        if ($event === null) {
+            self::fail('expected the frame payload to decode to a JSON object');
+        }
 
-            return $event;
-        }, $sink->frames);
+        return $event;
     }
 
     /** @return list<string> */
@@ -266,5 +272,59 @@ final class AgUiRunnerTest extends TestCase
     {
         /** @var list<string> */
         return array_column(self::decode($sink), 'type');
+    }
+
+    /**
+     * Fetches a value at a key/index, failing loudly rather than returning a
+     * possibly-undefined value. Shared by every guard clause below so the
+     * class carries one branch per shape instead of one per call site.
+     *
+     * @template TKey of array-key
+     * @template TValue
+     *
+     * @param array<TKey, TValue> $container
+     * @param TKey                $key
+     *
+     * @return TValue
+     */
+    private static function requireIndex(array $container, int|string $key, string $label): mixed
+    {
+        if (!array_key_exists($key, $container)) {
+            static::fail(sprintf('expected %s to be present', $label));
+        }
+
+        return $container[$key];
+    }
+
+    /**
+     * Fetches an array field, failing loudly rather than returning a
+     * possibly-undefined or possibly-non-array value.
+     *
+     * @param array<array-key, mixed> $container
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function requireArray(array $container, int|string $key, string $label): array
+    {
+        if (!array_key_exists($key, $container) || !is_array($container[$key])) {
+            static::fail(sprintf('expected %s to be an array', $label));
+        }
+
+        return $container[$key];
+    }
+
+    /**
+     * Fetches a string field, failing loudly rather than returning a
+     * possibly-undefined or possibly-non-string value.
+     *
+     * @param array<array-key, mixed> $container
+     */
+    private static function requireString(array $container, int|string $key, string $label): string
+    {
+        if (!array_key_exists($key, $container) || !is_string($container[$key])) {
+            static::fail(sprintf('expected %s to be a string', $label));
+        }
+
+        return $container[$key];
     }
 }

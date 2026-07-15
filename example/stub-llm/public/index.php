@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 use Example\StubLlm\CannedConversation;
 use Example\StubLlm\OpenAiSseWriter;
+use NaokiTsuchiya\BEARAgUi\Input\Coerce;
 
 require dirname(__DIR__, 3) . '/vendor/autoload.php';
 
@@ -38,9 +39,7 @@ if ($method !== 'POST' || $path !== '/v1/chat/completions') {
     return;
 }
 
-$decoded = json_decode((string) file_get_contents('php://input'), true);
-/** @var array<string, mixed> $requestBody */
-$requestBody = is_array($decoded) ? $decoded : [];
+$requestBody = Coerce::assoc(json_decode((string) file_get_contents('php://input'), true));
 
 header('Content-Type: text/event-stream');
 header('Cache-Control: no-cache');

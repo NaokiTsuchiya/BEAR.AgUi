@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Example\StubLlm;
 
 use function array_reverse;
-use function is_string;
 use function str_contains;
 use function str_starts_with;
 use function strtolower;
@@ -63,10 +62,10 @@ final readonly class StubScenario
     public static function detect(array $messages): string
     {
         foreach (array_reverse($messages) as $message) {
-            $content = $message['content'] ?? null;
+            $content = Wire::nullableString($message['content'] ?? null);
             if (
                 ($message['role'] ?? null) !== 'user'
-                || !is_string($content)
+                || $content === null
                 || str_starts_with($content, StubRequest::ALPS_CONTEXT_HEADING)
             ) {
                 continue;

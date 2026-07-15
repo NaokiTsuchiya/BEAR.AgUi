@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace NaokiTsuchiya\BEARAgUi\Input;
 
 use function array_keys;
+use function array_walk;
 use function is_array;
 use function is_string;
 
@@ -101,14 +102,14 @@ final class Coerce
         }
 
         $list = [];
-        foreach ($value as $entry) {
+        array_walk($value, static function (mixed $entry) use (&$list): void {
             if (!is_array($entry)) {
-                continue;
+                return;
             }
 
             /** @var array<string, mixed> $entry */
             $list[] = $entry;
-        }
+        });
 
         return $list;
     }

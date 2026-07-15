@@ -6,6 +6,7 @@ namespace NaokiTsuchiya\BEARAgUi\Integration\ExampleBear;
 
 use BEAR\Resource\ResourceInterface;
 use BEAR\ToolUse\Llm\StreamEvent;
+use BEAR\ToolUse\Runtime\Message;
 use BEAR\ToolUse\Schema\Tool;
 use NaokiTsuchiya\BEARAgUi\Event\AgUiEventInterface;
 use NaokiTsuchiya\BEARAgUi\Event\RunError;
@@ -69,33 +70,33 @@ final class InvocationsTest extends TestCase
         CoroutineTestRunner::run(function () use ($llm): void {
             $events = $this->drainRun($llm, 'weather and news please');
 
-            static::assertInstanceOf(RunStarted::class, $events[0]);
+            static::assertInstanceOf(RunStarted::class, $this->eventAt($events, 0));
 
             // Both TOOL_CALL_* groups carry the real wire ids (registry
             // id-keying, tasks-parallel T1) and the REAL resource bodies —
             // the resource-driven Dispatcher hit Weather and News.
             $starts = $this->ofType($events, ToolCallStart::class);
             static::assertCount(2, $starts);
-            $start0 = $starts[0];
+            $start0 = $this->eventAt($starts, 0);
             static::assertInstanceOf(ToolCallStart::class, $start0);
             static::assertSame('call-w', $start0->toolCallId);
             static::assertSame('weather_get', $start0->toolCallName);
-            $start1 = $starts[1];
+            $start1 = $this->eventAt($starts, 1);
             static::assertInstanceOf(ToolCallStart::class, $start1);
             static::assertSame('call-n', $start1->toolCallId);
 
             $results = $this->ofType($events, ToolCallResult::class);
             static::assertCount(2, $results);
-            $result0 = $results[0];
+            $result0 = $this->eventAt($results, 0);
             static::assertInstanceOf(ToolCallResult::class, $result0);
             static::assertSame('call-w', $result0->toolCallId);
             static::assertStringContainsString('"condition":"sunny"', $result0->content);
-            $result1 = $results[1];
+            $result1 = $this->eventAt($results, 1);
             static::assertInstanceOf(ToolCallResult::class, $result1);
             static::assertSame('call-n', $result1->toolCallId);
             static::assertStringContainsString('"headline"', $result1->content);
 
-            $finished = $events[count($events) - 1];
+            $finished = $this->eventAt($events, count($events) - 1);
             static::assertInstanceOf(RunFinished::class, $finished);
             static::assertSame('success', $this->outcomeType($finished));
         });
@@ -115,20 +116,26 @@ final class InvocationsTest extends TestCase
 
         $events = $this->drainRun($llm, 'remind me to buy milk');
 
-        $finished = $events[count($events) - 1];
+        $finished = $this->eventAt($events, count($events) - 1);
         static::assertInstanceOf(RunFinished::class, $finished);
         static::assertSame('interrupt', $this->outcomeType($finished));
 
-        $decoded = json_decode(json_encode($finished, JSON_THROW_ON_ERROR), true);
-        static::assertIsArray($decoded);
-        $outcome = $decoded['outcome'];
-        static::assertIsArray($outcome);
-        $interrupts = $outcome['interrupts'];
-        static::assertIsArray($interrupts);
-        $interrupt0 = $interrupts[0];
-        static::assertIsArray($interrupt0);
-        static::assertSame('tool_confirmation', $interrupt0['reason']);
-        static::assertSame('call-r', $interrupt0['toolCallId']);
+        $decoded = self::decodeJsonObject($finished);
+
+        /** @var mixed $rawOutcome */
+        $rawOutcome = $this->valueAt($decoded, 'outcome');
+        static::assertIsArray($rawOutcome);
+
+        /** @var mixed $rawInterrupts */
+        $rawInterrupts = $this->valueAt($rawOutcome, 'interrupts');
+        static::assertIsArray($rawInterrupts);
+
+        /** @var mixed $rawInterrupt0 */
+        $rawInterrupt0 = $this->valueAt($rawInterrupts, 0);
+        static::assertIsArray($rawInterrupt0);
+
+        static::assertSame('tool_confirmation', $this->valueAt($rawInterrupt0, 'reason'));
+        static::assertSame('call-r', $this->valueAt($rawInterrupt0, 'toolCallId'));
     }
 
     public function testUnsafeMessagePostIsGovernedAwayByAlpsPolicy(): void
@@ -153,8 +160,7 @@ final class InvocationsTest extends TestCase
 
         // The governance itself: the tools offered to the LLM never
         // included message_post (stripped by safeAndIdempotent).
-        $request0 = $llm->requests[0];
-        static::assertNotNull($request0);
+        $request0 = $this->requestAt($llm, 0);
         $offered = array_map(static fn(Tool $tool): string => $tool->name, $request0['tools']);
         static::assertSame(
             ['weather_get', 'news_get', 'reminder_put', 'package_search', 'word_similarity_get', 'rot13_get'],
@@ -163,12 +169,13 @@ final class InvocationsTest extends TestCase
 
         // The refused call is fed back to the model as an error tool_result
         // — the Message resource itself was never dispatched.
-        $feedback = json_encode($llm->requests[1]['messages'], JSON_THROW_ON_ERROR);
+        $request1 = $this->requestAt($llm, 1);
+        $feedback = json_encode($request1['messages'], JSON_THROW_ON_ERROR);
         static::assertStringContainsString('Tool is not enabled: message_post', $feedback);
 
         $results = $this->ofType($events, ToolCallResult::class);
         static::assertCount(1, $results);
-        $result0 = $results[0];
+        $result0 = $this->eventAt($results, 0);
         static::assertInstanceOf(ToolCallResult::class, $result0);
         static::assertSame('call-m', $result0->toolCallId);
     }
@@ -181,8 +188,8 @@ final class InvocationsTest extends TestCase
         // an exception or a status change.
         $events = $this->drainRun(new FakeStreamingLlmClient(), 'hello');
 
-        static::assertInstanceOf(RunStarted::class, $events[0]);
-        $last = $events[count($events) - 1];
+        static::assertInstanceOf(RunStarted::class, $this->eventAt($events, 0));
+        $last = $this->eventAt($events, count($events) - 1);
         static::assertInstanceOf(RunError::class, $last);
         static::assertSame('AGENT_ERROR', $last->code);
         static::assertSame('Internal agent error.', $last->message);
@@ -194,8 +201,14 @@ final class InvocationsTest extends TestCase
 
         static::assertSame(400, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertSame('VALIDATION_ERROR', $ro->body['code']);
-        static::assertNotSame([], $ro->body['errors']);
+
+        /** @var mixed $code */
+        $code = $ro->body['code'] ?? null;
+        static::assertSame('VALIDATION_ERROR', $code);
+
+        /** @var mixed $errors */
+        $errors = $ro->body['errors'] ?? null;
+        static::assertNotSame([], $errors);
     }
 
     public function testEmptyUserContentYieldsValidationError(): void
@@ -210,7 +223,10 @@ final class InvocationsTest extends TestCase
 
         static::assertSame(400, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertSame('VALIDATION_ERROR', $ro->body['code']);
+
+        /** @var mixed $code */
+        $code = $ro->body['code'] ?? null;
+        static::assertSame('VALIDATION_ERROR', $code);
     }
 
     public function testPingReportsHealthy(): void
@@ -219,7 +235,10 @@ final class InvocationsTest extends TestCase
 
         static::assertSame(200, $ro->code);
         static::assertIsArray($ro->body);
-        static::assertSame('Healthy', $ro->body['status']);
+
+        /** @var mixed $status */
+        $status = $ro->body['status'] ?? null;
+        static::assertSame('Healthy', $status);
     }
 
     private function invocations(): ResourceInterface
@@ -246,6 +265,7 @@ final class InvocationsTest extends TestCase
         assert(is_iterable($ro->body), 'Resource response body must be iterable to drain SSE events.');
 
         $events = [];
+        /** @var mixed $event */
         foreach ($ro->body as $event) {
             static::assertInstanceOf(AgUiEventInterface::class, $event);
             $events[] = $event;
@@ -278,11 +298,63 @@ final class InvocationsTest extends TestCase
 
     private function outcomeType(RunFinished $finished): string
     {
+        $decoded = self::decodeJsonObject($finished);
+
+        /** @var mixed $rawOutcome */
+        $rawOutcome = $this->valueAt($decoded, 'outcome');
+        static::assertIsArray($rawOutcome);
+
+        /** @var mixed $rawType */
+        $rawType = $this->valueAt($rawOutcome, 'type');
+        static::assertIsString($rawType);
+
+        return $rawType;
+    }
+
+    /** @return array<array-key, mixed> */
+    private static function decodeJsonObject(RunFinished $finished): array
+    {
+        /** @var mixed $decoded */
         $decoded = json_decode(json_encode($finished, JSON_THROW_ON_ERROR), true);
         static::assertIsArray($decoded);
-        $outcome = $decoded['outcome'];
-        static::assertIsArray($outcome);
 
-        return (string) $outcome['type'];
+        return $decoded;
+    }
+
+    /**
+     * Narrow `$events[$index]` in one place instead of duplicating the
+     * lookup at every call site — callers keep asserting the concrete
+     * event type themselves (`assertInstanceOf`), which already fails the
+     * same way when the index is missing.
+     *
+     * @param list<AgUiEventInterface> $events
+     */
+    private function eventAt(array $events, int $index): AgUiEventInterface|null
+    {
+        return $events[$index] ?? null;
+    }
+
+    /**
+     * Narrow `$array[$key] ?? null` in one place instead of duplicating the
+     * lookup at every call site.
+     *
+     * @param array<array-key, mixed> $array
+     */
+    private function valueAt(array $array, int|string $key): mixed
+    {
+        return $array[$key] ?? null;
+    }
+
+    /**
+     * The nth captured LLM request, asserted present.
+     *
+     * @return array{system: string, messages: list<Message>, tools: list<Tool>}
+     */
+    private function requestAt(FakeStreamingLlmClient $llm, int $index): array
+    {
+        $request = $llm->requests[$index] ?? null;
+        self::assertNotNull($request);
+
+        return $request;
     }
 }

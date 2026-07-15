@@ -37,14 +37,17 @@ final class PhpSapiSseSink implements SseSinkInterface
             }
         }
 
-        while (ob_get_level() > 0) {
+        $obLevel = ob_get_level();
+        while ($obLevel > 0) {
             // @mago-expect lint:no-error-control-operator
             // ob_end_flush() emits notices when no buffer is active during shutdown; under SSE we must keep flushing.
             @ob_end_flush();
+            $obLevel = ob_get_level();
         }
 
         foreach ($frames as $frame) {
-            if (connection_aborted() === 1) {
+            $aborted = connection_aborted();
+            if ($aborted === 1) {
                 return;
             }
 

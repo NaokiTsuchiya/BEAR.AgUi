@@ -102,12 +102,12 @@ final class ParallelStreamingAgent implements OptionAwareStreamingAgentInterface
             $this->messages[] = Message::assistant($state->contentBlocks);
 
             $dispatchGen = $this->toolDispatch->run($state->pendingToolCalls, $state->currentText, $requestToolList);
-            while ($dispatchGen->valid()) {
+            $isDispatchValid = $dispatchGen->valid();
+            while ($isDispatchValid) {
                 /** @var AgentEvent $confirmationOrResult */
                 $confirmationOrResult = $dispatchGen->current();
-                /** @psalm-suppress MixedAssignment */
-                $sent = yield $confirmationOrResult;
-                $dispatchGen->send($sent === true);
+                $dispatchGen->send(self::isConfirmed(yield $confirmationOrResult));
+                $isDispatchValid = $dispatchGen->valid();
             }
 
             $this->messages[] = Message::toolResults($dispatchGen->getReturn());
@@ -123,6 +123,11 @@ final class ParallelStreamingAgent implements OptionAwareStreamingAgentInterface
     public function reset(): void
     {
         $this->messages = [];
+    }
+
+    private static function isConfirmed(mixed $response): bool
+    {
+        return $response === true;
     }
 
     private function recordContentBlocks(StreamIterationState $state): void

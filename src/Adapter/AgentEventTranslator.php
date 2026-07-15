@@ -21,6 +21,7 @@ use NaokiTsuchiya\BEARAgUi\ToolUse\ToolCallView;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
+use function array_key_exists;
 use function array_shift;
 use function is_string;
 
@@ -197,8 +198,10 @@ final class AgentEventTranslator
 
     private function dataString(AgentEvent $event, string $key): string
     {
-        $value = $event->data[$key] ?? '';
+        if (!array_key_exists($key, $event->data) || !is_string($event->data[$key])) {
+            return '';
+        }
 
-        return is_string($value) ? $value : '';
+        return $event->data[$key];
     }
 }

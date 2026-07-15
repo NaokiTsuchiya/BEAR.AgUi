@@ -26,8 +26,8 @@ final class MessageHistoryMapperTest extends TestCase
         ]);
 
         static::assertCount(2, $history);
-        $userMessage = $history[0];
-        $assistantMessage = $history[1];
+        $userMessage = $history[0] ?? null;
+        $assistantMessage = $history[1] ?? null;
         static::assertNotNull($userMessage);
         static::assertNotNull($assistantMessage);
         static::assertSame('user', $userMessage->role);
@@ -46,7 +46,7 @@ final class MessageHistoryMapperTest extends TestCase
         ]);
 
         static::assertCount(2, $history);
-        $assistantMessage = $history[0];
+        $assistantMessage = $history[0] ?? null;
         static::assertNotNull($assistantMessage);
         static::assertSame(
             [
@@ -56,7 +56,7 @@ final class MessageHistoryMapperTest extends TestCase
             $assistantMessage->content,
         );
 
-        $resultMessage = $history[1];
+        $resultMessage = $history[1] ?? null;
         static::assertNotNull($resultMessage);
         static::assertSame('user', $resultMessage->role);
         static::assertSame(
@@ -84,11 +84,13 @@ final class MessageHistoryMapperTest extends TestCase
         ]);
 
         static::assertCount(2, $history);
-        $toolResultsMessage = $history[1];
+        $toolResultsMessage = $history[1] ?? null;
         static::assertNotNull($toolResultsMessage);
         static::assertCount(2, $toolResultsMessage->content);
-        static::assertSame('call-a', $toolResultsMessage->content[0]['tool_use_id']);
-        static::assertSame('call-b', $toolResultsMessage->content[1]['tool_use_id']);
+        $firstResult = $toolResultsMessage->content[0] ?? [];
+        $secondResult = $toolResultsMessage->content[1] ?? [];
+        static::assertSame('call-a', $firstResult['tool_use_id'] ?? null);
+        static::assertSame('call-b', $secondResult['tool_use_id'] ?? null);
     }
 
     public function testToolFailureMapsToErrorResult(): void
@@ -98,11 +100,11 @@ final class MessageHistoryMapperTest extends TestCase
             new ToolMessage('m2', 'call-1', ToolOutcome::failure(null, 'boom')),
         ]);
 
-        $toolResultsMessage = $history[1];
+        $toolResultsMessage = $history[1] ?? null;
         static::assertNotNull($toolResultsMessage);
-        $result = $toolResultsMessage->content[0];
-        static::assertTrue($result['is_error']);
-        static::assertSame('boom', $result['content']);
+        $result = $toolResultsMessage->content[0] ?? [];
+        static::assertTrue($result['is_error'] ?? null);
+        static::assertSame('boom', $result['content'] ?? null);
     }
 
     public function testSystemActivityAndReasoningAreSkipped(): void
@@ -115,7 +117,7 @@ final class MessageHistoryMapperTest extends TestCase
         ]);
 
         static::assertCount(1, $history);
-        $userMessage = $history[0];
+        $userMessage = $history[0] ?? null;
         static::assertNotNull($userMessage);
         static::assertSame('user', $userMessage->role);
     }
