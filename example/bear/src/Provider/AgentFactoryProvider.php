@@ -41,6 +41,7 @@ final class AgentFactoryProvider implements ProviderInterface
         private readonly ToolCollectorInterface $collector,
     ) {}
 
+    /** @throws RuntimeException If the system prompt file cannot be read. */
     #[Override]
     public function get(): InstrumentedAgentFactory
     {
@@ -52,6 +53,7 @@ final class AgentFactoryProvider implements ProviderInterface
         );
     }
 
+    /** @throws RuntimeException If the system prompt file cannot be read. */
     private function readSystemPrompt(): string
     {
         $contents = file_get_contents(self::SYSTEM_PROMPT_PATH);
