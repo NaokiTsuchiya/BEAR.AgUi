@@ -163,7 +163,15 @@ final class InvocationsTest extends TestCase
         $request0 = $this->requestAt($llm, 0);
         $offered = array_map(static fn(Tool $tool): string => $tool->name, $request0['tools']);
         static::assertSame(
-            ['weather_get', 'news_get', 'reminder_put', 'package_search', 'word_similarity_get', 'rot13_get'],
+            [
+                'weather_get',
+                'news_get',
+                'reminder_put',
+                'package_search',
+                'word_similarity_get',
+                'rot13_get',
+                'sun_info_get',
+            ],
             $offered,
         );
 

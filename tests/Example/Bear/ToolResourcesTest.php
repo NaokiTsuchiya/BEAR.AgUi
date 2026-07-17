@@ -21,6 +21,7 @@ use Psr\Http\Message\ResponseInterface;
 use Ray\Di\AbstractModule;
 use Ray\Di\Injector;
 use Ray\Di\InjectorInterface;
+use RuntimeException;
 
 use function array_map;
 use function is_dir;
@@ -36,6 +37,11 @@ use const JSON_THROW_ON_ERROR;
  * mappings ToolCollector derives from the attributes. Deliberately wired
  * from BEAR.Resource + ToolUseModule only — the app's own modules get
  * their coverage from the governance / integration tests.
+ *
+ * @mago-expect lint:too-many-methods
+ *
+ * One method per #[Tool] resource plus the collector/registry wiring test,
+ * same convention as InvocationsTest.
  */
 #[CoversNothing]
 final class ToolResourcesTest extends TestCase
@@ -130,6 +136,28 @@ final class ToolResourcesTest extends TestCase
         static::assertSame('BEAR.Sunday', self::field($roundTrip->body, 'output'));
     }
 
+    public function testSunInfoReturnsSunriseAndSunsetForKnownCity(): void
+    {
+        $resource = self::injector()->getInstance(ResourceInterface::class);
+
+        $ro = $resource->get('app://self/sun-info', ['city' => 'Tokyo', 'date' => '2026-07-20']);
+
+        static::assertSame(200, $ro->code);
+        static::assertIsArray($ro->body);
+        static::assertSame('Tokyo', self::field($ro->body, 'city'));
+        static::assertSame('2026-07-20', self::field($ro->body, 'date'));
+        static::assertMatchesRegularExpression('/^\d{2}:\d{2} UTC$/', (string) self::field($ro->body, 'sunrise_utc'));
+        static::assertMatchesRegularExpression('/^\d{2}:\d{2} UTC$/', (string) self::field($ro->body, 'sunset_utc'));
+    }
+
+    public function testSunInfoRejectsUnknownCity(): void
+    {
+        $resource = self::injector()->getInstance(ResourceInterface::class);
+
+        $this->expectException(RuntimeException::class);
+        $resource->get('app://self/sun-info', ['city' => 'Atlantis']);
+    }
+
     public function testCollectorDerivesToolDeclarationsAndFillsRegistry(): void
     {
         $injector = self::injector();
@@ -146,11 +174,12 @@ final class ToolResourcesTest extends TestCase
                 'package_search',
                 'word_similarity_get',
                 'rot13_get',
+                'sun_info_get',
             ],
             array_map(static fn(Tool $tool): string => $tool->name, $tools),
         );
         static::assertSame(
-            [false, false, false, true, false, false, false],
+            [false, false, false, true, false, false, false, false],
             array_map(static fn(Tool $tool): bool => $tool->confirm, $tools),
         );
 
@@ -166,6 +195,7 @@ final class ToolResourcesTest extends TestCase
                 'package_search',
                 'word_similarity_get',
                 'rot13_get',
+                'sun_info_get',
             ],
             $registry->getToolNames(),
         );

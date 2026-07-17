@@ -20,6 +20,7 @@ final class ToolUris
         'app://self/package',
         'app://self/similarity',
         'app://self/rot13',
+        'app://self/sun-info',
     ];
 
     /** Static holder only. */

@@ -15,6 +15,7 @@
     <descriptor id="query" title="Search term for a Composer package name"/>
     <descriptor id="a" title="First word or phrase"/>
     <descriptor id="b" title="Second word or phrase"/>
+    <descriptor id="date" title="Date to compute for, defaults to today"/>
 
     <!-- tool transitions: descriptor id == tool name -->
     <descriptor id="weather_get" type="safe" title="Read-only weather lookup"/>
@@ -24,4 +25,5 @@
     <descriptor id="package_search" type="safe" title="Read-only Packagist package search"/>
     <descriptor id="word_similarity_get" type="safe" title="Read-only PHP string-similarity comparison"/>
     <descriptor id="rot13_get" type="safe" title="Read-only PHP str_rot13() cipher"/>
+    <descriptor id="sun_info_get" type="safe" title="Read-only PHP date_sun_info() sunrise/sunset lookup"/>
 </alps>

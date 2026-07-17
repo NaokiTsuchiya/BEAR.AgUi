@@ -37,6 +37,7 @@ final class AlpsGovernanceTest extends TestCase
         static::assertSame('safe', $dictionary->getDescriptor('package_search')['type'] ?? null);
         static::assertSame('safe', $dictionary->getDescriptor('word_similarity_get')['type'] ?? null);
         static::assertSame('safe', $dictionary->getDescriptor('rot13_get')['type'] ?? null);
+        static::assertSame('safe', $dictionary->getDescriptor('sun_info_get')['type'] ?? null);
     }
 
     public function testSafeAndIdempotentPolicyStripsUnsafeToolFromRequest(): void
@@ -49,7 +50,15 @@ final class AlpsGovernanceTest extends TestCase
         $filtered = AlpsToolPolicyInputProcessor::safeAndIdempotent($dictionary)->process($request);
 
         static::assertSame(
-            ['weather_get', 'news_get', 'reminder_put', 'package_search', 'word_similarity_get', 'rot13_get'],
+            [
+                'weather_get',
+                'news_get',
+                'reminder_put',
+                'package_search',
+                'word_similarity_get',
+                'rot13_get',
+                'sun_info_get',
+            ],
             array_map(static fn(Tool $tool): string => $tool->name, $filtered->tools),
         );
     }
@@ -69,6 +78,7 @@ final class AlpsGovernanceTest extends TestCase
                 'package_search',
                 'word_similarity_get',
                 'rot13_get',
+                'sun_info_get',
             ],
             $factory->knownToolNames(),
         );
