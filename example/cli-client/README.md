@@ -49,7 +49,7 @@ php example/cli-client/bin/agui-chat.php
 **1 発モード**(引数にメッセージを渡すと 1 run だけ実行して終了。スクリプト/手動 smoke 向け):
 
 ```console
-php example/cli-client/bin/agui-chat.php "Weather in Tokyo and the news, please."
+php example/cli-client/bin/agui-chat.php "ROT13 BEAR Sunday and compare PHP vs PHP8."
 ```
 
 別ホストに向けるには:

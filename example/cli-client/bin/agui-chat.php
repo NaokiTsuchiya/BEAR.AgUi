@@ -10,7 +10,7 @@
  *
  * One-shot mode (message on argv, exits after the run):
  *
- *   php example/cli-client/bin/agui-chat.php "Weather in Tokyo and the news, please."
+ *   php example/cli-client/bin/agui-chat.php "ROT13 BEAR Sunday and compare PHP vs PHP8."
  *
  * REPL mode (no argv, reads stdin line by line until EOF):
  *

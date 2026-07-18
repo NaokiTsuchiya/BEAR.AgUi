@@ -16,15 +16,15 @@ use function strtolower;
  * ALPS context message the M3 app appends — recognized by its heading,
  * since it lists every tool name and would match all keywords):
  *
- *  - contains "remind"           → reminder_put (confirm→interrupt demo)
- *  - contains "weather" / "news" → weather_get + news_get in ONE turn
- *                                   (parallel dispatch demo, D29)
- *  - anything else               → get_time (the original M2 conversation)
+ *  - contains "remind"             → reminder_put (confirm→interrupt demo)
+ *  - contains "rot13" / "similar"  → rot13_get + word_similarity_get in ONE
+ *                                     turn (parallel dispatch demo, D29)
+ *  - anything else                 → get_time (the original M2 conversation)
  */
 final readonly class StubScenario
 {
     public const GET_TIME = 'get_time';
-    public const WEATHER_NEWS = 'weather_news';
+    public const PARALLEL_DEMO = 'parallel_demo';
     public const REMINDER = 'reminder';
 
     /** @var array<string, list<array{0: string, 1: string, 2: list<string>}>> scenario → [id, tool name, argument chunks] */
@@ -32,9 +32,9 @@ final readonly class StubScenario
         self::GET_TIME => [
             ['call_demo_1', 'get_time', ['{"timezone"', ':"UTC"}']],
         ],
-        self::WEATHER_NEWS => [
-            ['call_demo_w', 'weather_get', ['{"city"', ':"Tokyo"}']],
-            ['call_demo_n', 'news_get', ['{"topic"', ':"PHP"}']],
+        self::PARALLEL_DEMO => [
+            ['call_demo_r13', 'rot13_get', ['{"text"', ':"BEAR Sunday"}']],
+            ['call_demo_sim', 'word_similarity_get', ['{"a":"PHP",', '"b":"PHP8"}']],
         ],
         self::REMINDER => [
             ['call_demo_r', 'reminder_put', ['{"id":"r-1",', '"text":"buy milk"}']],
@@ -44,14 +44,14 @@ final readonly class StubScenario
     /** @var array<string, list<string>> scenario → leading text deltas of turn 1 */
     public const LEAD_TEXT = [
         self::GET_TIME => ['Let me check ', 'the current time.'],
-        self::WEATHER_NEWS => ['Checking weather ', 'and news in parallel.'],
+        self::PARALLEL_DEMO => ['Running ROT13 ', 'and comparing similarity in parallel.'],
         self::REMINDER => ['I would like to ', 'save this reminder.'],
     ];
 
     /** @var array<string, string> scenario → final-turn text prefix */
     public const FINAL_PREFIX = [
         self::GET_TIME => 'The current time is ',
-        self::WEATHER_NEWS => 'Gathered in parallel: ',
+        self::PARALLEL_DEMO => 'Gathered in parallel: ',
         self::REMINDER => 'Reminder stored: ',
     ];
 
@@ -83,8 +83,8 @@ final readonly class StubScenario
             return self::REMINDER;
         }
 
-        if (str_contains($text, 'weather') || str_contains($text, 'news')) {
-            return self::WEATHER_NEWS;
+        if (str_contains($text, 'rot13') || str_contains($text, 'similar')) {
+            return self::PARALLEL_DEMO;
         }
 
         return self::GET_TIME;

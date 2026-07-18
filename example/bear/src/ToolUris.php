@@ -13,8 +13,6 @@ final class ToolUris
 {
     /** @var list<string> */
     public const ALL = [
-        'app://self/weather',
-        'app://self/news',
         'app://self/message',
         'app://self/reminder',
         'app://self/package',

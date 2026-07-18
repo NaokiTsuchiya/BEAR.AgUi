@@ -40,7 +40,7 @@ final class AlpsContextAsSystemPromptProcessorTest extends TestCase
         static::assertSame([], $processed->messages);
         static::assertStringStartsWith('You are a helpful assistant.', $processed->systemPrompt);
         static::assertTrue(str_contains($processed->systemPrompt, 'Application semantics from ALPS:'));
-        static::assertTrue(str_contains($processed->systemPrompt, 'weather_get'));
+        static::assertTrue(str_contains($processed->systemPrompt, 'rot13_get'));
     }
 
     public function testRequestIsUnchangedWhenNoToolHasAlpsSemantics(): void

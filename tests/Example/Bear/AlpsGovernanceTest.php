@@ -30,8 +30,6 @@ final class AlpsGovernanceTest extends TestCase
     {
         $dictionary = ExampleBearInjectorFactory::app()->getInstance(AlpsSemanticDictionary::class);
 
-        static::assertSame('safe', $dictionary->getDescriptor('weather_get')['type'] ?? null);
-        static::assertSame('safe', $dictionary->getDescriptor('news_get')['type'] ?? null);
         static::assertSame('unsafe', $dictionary->getDescriptor('message_post')['type'] ?? null);
         static::assertSame('idempotent', $dictionary->getDescriptor('reminder_put')['type'] ?? null);
         static::assertSame('safe', $dictionary->getDescriptor('package_search')['type'] ?? null);
@@ -51,8 +49,6 @@ final class AlpsGovernanceTest extends TestCase
 
         static::assertSame(
             [
-                'weather_get',
-                'news_get',
                 'reminder_put',
                 'package_search',
                 'word_similarity_get',
@@ -71,8 +67,6 @@ final class AlpsGovernanceTest extends TestCase
         // is governed per request by the ALPS policy processor, not here.
         static::assertSame(
             [
-                'weather_get',
-                'news_get',
                 'message_post',
                 'reminder_put',
                 'package_search',
