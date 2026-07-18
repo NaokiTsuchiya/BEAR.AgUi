@@ -9,6 +9,7 @@ use BEAR\ToolUse\Attribute\Tool;
 use GuzzleHttp\Psr7\Request;
 use Psr\Http\Client\ClientInterface;
 
+use function count;
 use function http_build_query;
 use function is_array;
 use function json_decode;
@@ -47,26 +48,35 @@ final class Package extends ResourceObject
      * @mago-expect analysis:unhandled-thrown-type
      * @mago-expect analysis:mixed-assignment
      */
-    #[Tool(name: 'package_search', description: 'Search Packagist for a PHP/Composer package by name', confirm: false)]
+    #[Tool(name: 'package_search', description: 'Search Packagist for PHP/Composer packages by name (returns the top matches)', confirm: false)]
     public function onGet(string $query): static
     {
-        $uri = 'https://packagist.org/search.json?' . http_build_query(['q' => $query, 'per_page' => 1]);
+        $uri = 'https://packagist.org/search.json?' . http_build_query(['q' => $query, 'per_page' => 5]);
         $response = $this->httpClient->sendRequest(new Request('GET', $uri));
         $decoded = json_decode((string) $response->getBody(), true);
 
         $results = is_array($decoded) && is_array($decoded['results'] ?? null) ? $decoded['results'] : [];
-        $top = $results[0] ?? null;
 
-        $this->body = is_array($top)
-            ? [
-                'query' => $query,
-                'found' => true,
-                'name' => $top['name'] ?? null,
-                'description' => $top['description'] ?? null,
-                'url' => $top['url'] ?? null,
-                'downloads' => $top['downloads'] ?? null,
-            ]
-            : ['query' => $query, 'found' => false];
+        $packages = [];
+        foreach ($results as $result) {
+            if (! is_array($result)) {
+                continue;
+            }
+
+            $packages[] = [
+                'name' => $result['name'] ?? null,
+                'description' => $result['description'] ?? null,
+                'url' => $result['url'] ?? null,
+                'downloads' => $result['downloads'] ?? null,
+            ];
+        }
+
+        $this->body = [
+            'query' => $query,
+            'found' => $packages !== [],
+            'count' => count($packages),
+            'results' => $packages,
+        ];
 
         return $this;
     }
