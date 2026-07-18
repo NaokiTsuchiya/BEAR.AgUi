@@ -218,8 +218,11 @@
       border: none;
       border-radius: 0.6rem;
       resize: none;
-      min-height: 3.4rem;
-      max-height: 40vh;
+      /* Auto-grows with content (see the useLayoutEffect in App); this is
+         the floor, and it only scrolls once it hits the max cap. */
+      min-height: 5.5rem;
+      max-height: 55vh;
+      overflow-y: auto;
       font-family: inherit;
       color: inherit;
     }
@@ -706,6 +709,19 @@
           inputRef.current.focus();
         }
       }, [busy]);
+
+      // Grow the textarea to fit its content instead of scrolling: reset to
+      // auto so it can shrink, then match scrollHeight. CSS max-height caps
+      // it and re-enables scrolling only past that point. Runs on every
+      // input change, so typing, a preset fill, and the post-send clear all
+      // resize it.
+      React.useLayoutEffect(() => {
+        const textarea = inputRef.current;
+        if (textarea !== null) {
+          textarea.style.height = 'auto';
+          textarea.style.height = `${textarea.scrollHeight}px`;
+        }
+      }, [input]);
 
       // The one send path, shared by the composer (Enter / 送信) and the
       // one-click demo preset buttons — so a preset skips typing entirely.
