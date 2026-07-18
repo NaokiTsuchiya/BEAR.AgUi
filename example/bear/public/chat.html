@@ -23,6 +23,10 @@
   <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+  <!-- Assistant text arrives as Markdown from the LLM; marked parses it and
+       DOMPurify sanitizes the result before it is injected as HTML. -->
+  <script src="https://unpkg.com/marked@12.0.2/marked.min.js"></script>
+  <script src="https://unpkg.com/dompurify@3.1.6/dist/purify.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -65,6 +69,46 @@
     }
     .user { align-self: flex-end; background: #1a56db; color: #ffffff; }
     .assistant { align-self: flex-start; background: #ffffff; border: 1px solid #d8dce1; }
+    /* Rendered Markdown inside an assistant bubble. pre-wrap (inherited from
+       .bubble) would double the spacing of block elements, so reset it and
+       tighten the first/last child margins to keep the bubble compact. */
+    .assistant.markdown { white-space: normal; }
+    .markdown > :first-child { margin-top: 0; }
+    .markdown > :last-child { margin-bottom: 0; }
+    .markdown p { margin: 0.5em 0; }
+    .markdown ul, .markdown ol { margin: 0.5em 0; padding-left: 1.4em; }
+    .markdown li { margin: 0.2em 0; }
+    .markdown li > p { margin: 0.2em 0; }
+    .markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin: 0.7em 0 0.3em; line-height: 1.3; }
+    .markdown h1 { font-size: 1.3rem; }
+    .markdown h2 { font-size: 1.2rem; }
+    .markdown h3 { font-size: 1.1rem; }
+    .markdown a { color: #1a56db; }
+    .markdown blockquote {
+      margin: 0.5em 0;
+      padding: 0.1em 0.9em;
+      border-left: 3px solid #d0d7de;
+      color: #57606a;
+    }
+    .markdown code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.9em;
+    }
+    .markdown :not(pre) > code { background: #eef1f4; padding: 0.1em 0.35em; border-radius: 0.35em; }
+    .markdown pre {
+      background: #0d1117;
+      color: #e6edf3;
+      padding: 0.75rem 0.9rem;
+      border-radius: 0.55rem;
+      overflow-x: auto;
+      margin: 0.5em 0;
+    }
+    .markdown pre code { background: none; padding: 0; color: inherit; font-size: 0.88rem; }
+    .markdown table { border-collapse: collapse; margin: 0.5em 0; }
+    .markdown th, .markdown td { border: 1px solid #d0d7de; padding: 0.3em 0.6em; }
+    .markdown th { background: #f4f5f7; }
+    .markdown hr { border: none; border-top: 1px solid #d8dce1; margin: 0.8em 0; }
+    .markdown img { max-width: 100%; }
     .tool {
       align-self: flex-start;
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -161,6 +205,20 @@
   <div id="root"></div>
   <script type="text/babel" data-presets="react">
     'use strict';
+
+    // LLM output is Markdown. Links open in a new tab so a demo click never
+    // navigates away from the chat.
+    DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+      if (node.tagName === 'A') {
+        node.setAttribute('target', '_blank');
+        node.setAttribute('rel', 'noopener noreferrer');
+      }
+    });
+
+    /** Parse Markdown to sanitized HTML for dangerouslySetInnerHTML. */
+    function renderMarkdown(text) {
+      return DOMPurify.sanitize(marked.parse(text, { gfm: true, breaks: true }));
+    }
 
     const stringOrEmpty = (value) => (typeof value === 'string' ? value : '');
 
@@ -514,7 +572,9 @@
           // Some models stream a whitespace-only chunk (e.g. a lone "\n")
           // as filler right before a tool call; AG-UI-wise it's a valid
           // TEXT_MESSAGE, but showing it as an empty bubble reads as broken.
-          return entry.text.trim() === '' ? null : <div className="bubble assistant">{entry.text}</div>;
+          return entry.text.trim() === ''
+            ? null
+            : <div className="bubble assistant markdown" dangerouslySetInnerHTML={{ __html: renderMarkdown(entry.text) }} />;
         case 'tool':
           return (
             <div className="tool">
