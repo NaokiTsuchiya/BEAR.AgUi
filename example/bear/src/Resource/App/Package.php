@@ -48,7 +48,11 @@ final class Package extends ResourceObject
      * @mago-expect analysis:unhandled-thrown-type
      * @mago-expect analysis:mixed-assignment
      */
-    #[Tool(name: 'package_search', description: 'Search Packagist for PHP/Composer packages by name (returns the top matches)', confirm: false)]
+    #[Tool(
+        name: 'package_search',
+        description: 'Search Packagist for PHP/Composer packages by name (returns the top matches)',
+        confirm: false,
+    )]
     public function onGet(string $query): static
     {
         $uri = 'https://packagist.org/search.json?' . http_build_query(['q' => $query, 'per_page' => 5]);
@@ -59,7 +63,7 @@ final class Package extends ResourceObject
 
         $packages = [];
         foreach ($results as $result) {
-            if (! is_array($result)) {
+            if (!is_array($result)) {
                 continue;
             }
 
