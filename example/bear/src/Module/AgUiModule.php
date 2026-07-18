@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Example\Bear\Module;
 
 use BEAR\ToolUse\Schema\AlpsSemanticDictionary;
+use Example\Bear\Logger\StdoutLogger;
 use Example\Bear\Provider\AgentFactoryProvider;
 use Example\Bear\Provider\AgUiRunnerProvider;
 use NaokiTsuchiya\BEARAgUi\Adapter\AgUiAdapter;
@@ -16,7 +17,6 @@ use NaokiTsuchiya\BEARAgUi\ToolUse\InstrumentedAgentFactory;
 use NaokiTsuchiya\BEARAgUi\ToolUse\MessageHistoryMapper;
 use Override;
 use Psr\Log\LoggerInterface;
-use Psr\Log\NullLogger;
 use Ray\Di\AbstractModule;
 use Ray\Di\Scope;
 use ReflectionException;
@@ -46,7 +46,7 @@ final class AgUiModule extends AbstractModule
             'profilePath' => 'alps_profile_path',
         ])->in(Scope::SINGLETON);
 
-        $this->bind(LoggerInterface::class)->to(NullLogger::class)->in(Scope::SINGLETON);
+        $this->bind(LoggerInterface::class)->to(StdoutLogger::class)->in(Scope::SINGLETON);
         $this->bind(RunAgentInputParser::class)->in(Scope::SINGLETON);
         $this->bind(SseEncoder::class)->in(Scope::SINGLETON);
         $this->bind(SseResponder::class)->in(Scope::SINGLETON);

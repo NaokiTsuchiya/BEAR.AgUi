@@ -15,6 +15,7 @@ use NaokiTsuchiya\BEARAgUi\Input\Message\UserMessage;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
+/** @mago-expect lint:cyclomatic-complexity */
 #[CoversClass(MessageHistoryMapper::class)]
 final class MessageHistoryMapperTest extends TestCase
 {
@@ -125,5 +126,55 @@ final class MessageHistoryMapperTest extends TestCase
     public function testEmptyInputReturnsEmptyHistory(): void
     {
         static::assertSame([], (new MessageHistoryMapper())->map([]));
+    }
+
+    public function testTrailingUnresolvedToolUseIsCancelled(): void
+    {
+        // An interrupted confirm-required call (D4) never gets a ToolMessage;
+        // the browser resends the abandoned turn as-is on the next run.
+        $history = (new MessageHistoryMapper())->map([
+            new AssistantMessage('m1', null, [
+                new AssistantToolCall('call-1', 'reminder_put', ['text' => 'buy milk']),
+            ]),
+        ]);
+
+        static::assertCount(2, $history);
+        $resultMessage = $history[1] ?? null;
+        static::assertNotNull($resultMessage);
+        static::assertSame('user', $resultMessage->role);
+        static::assertSame(
+            [
+                [
+                    'type' => 'tool_result',
+                    'tool_use_id' => 'call-1',
+                    'content' => 'User cancelled this operation.',
+                    'is_error' => true,
+                ],
+            ],
+            $resultMessage->content,
+        );
+    }
+
+    public function testUnresolvedToolUseFollowedByAnotherTurnIsCancelledBeforeIt(): void
+    {
+        $history = (new MessageHistoryMapper())->map([
+            new AssistantMessage('m1', null, [
+                new AssistantToolCall('call-1', 'weather_get', []),
+                new AssistantToolCall('call-2', 'news_get', []),
+            ]),
+            new UserMessage('u2', 'never mind, what time is it?'),
+        ]);
+
+        static::assertCount(3, $history);
+        $cancelledResults = $history[1] ?? null;
+        static::assertNotNull($cancelledResults);
+        static::assertSame('user', $cancelledResults->role);
+        static::assertCount(2, $cancelledResults->content);
+        static::assertSame('call-1', $cancelledResults->content[0]['tool_use_id'] ?? null);
+        static::assertSame('call-2', $cancelledResults->content[1]['tool_use_id'] ?? null);
+
+        $nextUserMessage = $history[2] ?? null;
+        static::assertNotNull($nextUserMessage);
+        static::assertSame([['type' => 'text', 'text' => 'never mind, what time is it?']], $nextUserMessage->content);
     }
 }

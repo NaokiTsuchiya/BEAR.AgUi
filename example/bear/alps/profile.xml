@@ -7,7 +7,6 @@
 
     <!-- input parameter semantics (AlpsContextInputProcessor / SchemaConverter fallback) -->
     <descriptor id="city" title="City name to look up"/>
-    <descriptor id="topic" title="Topic keyword to search headlines for"/>
     <descriptor id="to" title="Recipient address"/>
     <descriptor id="body" title="Message body text"/>
     <descriptor id="id" title="Reminder identifier (upsert key)"/>
@@ -18,8 +17,6 @@
     <descriptor id="date" title="Date to compute for, defaults to today"/>
 
     <!-- tool transitions: descriptor id == tool name -->
-    <descriptor id="weather_get" type="safe" title="Read-only weather lookup"/>
-    <descriptor id="news_get" type="safe" title="Read-only news headline lookup"/>
     <descriptor id="message_post" type="unsafe" title="Sends a message on behalf of the user"/>
     <descriptor id="reminder_put" type="idempotent" title="Creates or replaces a reminder"/>
     <descriptor id="package_search" type="safe" title="Read-only Packagist package search"/>

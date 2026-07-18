@@ -98,14 +98,14 @@ final class CannedConversationTest extends TestCase
     }
 
     /** @throws RuntimeException */
-    public function testWeatherKeywordPlaysParallelToolScenario(): void
+    public function testRot13KeywordPlaysParallelToolScenario(): void
     {
         // The ALPS context message the M3 app appends lists every tool name;
         // scenario detection must skip it and read the human trigger.
         $chunks = self::respond([
             'model' => 'gpt-test',
             'messages' => [
-                ['role' => 'user', 'content' => 'Weather in Tokyo and the news, please.'],
+                ['role' => 'user', 'content' => 'ROT13 BEAR Sunday and compare PHP vs PHP8.'],
                 ['role' => 'user', 'content' => "Application semantics from ALPS:\n- reminder_put [idempotent]: x"],
             ],
         ]);
@@ -114,10 +114,10 @@ final class CannedConversationTest extends TestCase
         static::assertCount(2, $starts);
         $firstStart = self::requireArray(self::requireKey($starts, 0));
         $firstFunction = self::requireArray(self::requireKey($firstStart, 'function'));
-        static::assertSame('weather_get', self::requireKey($firstFunction, 'name'));
+        static::assertSame('rot13_get', self::requireKey($firstFunction, 'name'));
         $secondStart = self::requireArray(self::requireKey($starts, 1));
         $secondFunction = self::requireArray(self::requireKey($secondStart, 'function'));
-        static::assertSame('news_get', self::requireKey($secondFunction, 'name'));
+        static::assertSame('word_similarity_get', self::requireKey($secondFunction, 'name'));
         self::assertFinishedWith('tool_calls', $chunks);
     }
 

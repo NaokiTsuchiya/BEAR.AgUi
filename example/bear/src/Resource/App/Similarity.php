@@ -18,7 +18,7 @@ use function similar_text;
  * exist but have never seen an LLM reach for them mid-conversation.
  *
  * ALPS marks `word_similarity_get` as `safe`, so it's confirm-free and
- * joins the parallel wave alongside weather_get/news_get/package_search.
+ * joins the parallel wave alongside rot13_get/package_search.
  */
 final class Similarity extends ResourceObject
 {

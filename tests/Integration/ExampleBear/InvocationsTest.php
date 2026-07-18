@@ -53,11 +53,11 @@ final class InvocationsTest extends TestCase
     {
         $llm = new FakeStreamingLlmClient();
         $llm->queueScript([
-            new StreamEvent(StreamEvent::TOOL_USE_START, ['id' => 'call-w', 'name' => 'weather_get']),
-            new StreamEvent(StreamEvent::TOOL_USE_DELTA, ['input' => '{"city":"Tokyo"}']),
+            new StreamEvent(StreamEvent::TOOL_USE_START, ['id' => 'call-r', 'name' => 'rot13_get']),
+            new StreamEvent(StreamEvent::TOOL_USE_DELTA, ['input' => '{"text":"BEAR Sunday"}']),
             new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
-            new StreamEvent(StreamEvent::TOOL_USE_START, ['id' => 'call-n', 'name' => 'news_get']),
-            new StreamEvent(StreamEvent::TOOL_USE_DELTA, ['input' => '{"topic":"php"}']),
+            new StreamEvent(StreamEvent::TOOL_USE_START, ['id' => 'call-s', 'name' => 'word_similarity_get']),
+            new StreamEvent(StreamEvent::TOOL_USE_DELTA, ['input' => '{"a":"PHP","b":"PHP8"}']),
             new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
             new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => 'tool_use']),
         ]);
@@ -68,33 +68,33 @@ final class InvocationsTest extends TestCase
         ]);
 
         CoroutineTestRunner::run(function () use ($llm): void {
-            $events = $this->drainRun($llm, 'weather and news please');
+            $events = $this->drainRun($llm, 'rot13 and similarity please');
 
             static::assertInstanceOf(RunStarted::class, $this->eventAt($events, 0));
 
             // Both TOOL_CALL_* groups carry the real wire ids (registry
             // id-keying, tasks-parallel T1) and the REAL resource bodies —
-            // the resource-driven Dispatcher hit Weather and News.
+            // the resource-driven Dispatcher hit Rot13 and Similarity.
             $starts = $this->ofType($events, ToolCallStart::class);
             static::assertCount(2, $starts);
             $start0 = $this->eventAt($starts, 0);
             static::assertInstanceOf(ToolCallStart::class, $start0);
-            static::assertSame('call-w', $start0->toolCallId);
-            static::assertSame('weather_get', $start0->toolCallName);
+            static::assertSame('call-r', $start0->toolCallId);
+            static::assertSame('rot13_get', $start0->toolCallName);
             $start1 = $this->eventAt($starts, 1);
             static::assertInstanceOf(ToolCallStart::class, $start1);
-            static::assertSame('call-n', $start1->toolCallId);
+            static::assertSame('call-s', $start1->toolCallId);
 
             $results = $this->ofType($events, ToolCallResult::class);
             static::assertCount(2, $results);
             $result0 = $this->eventAt($results, 0);
             static::assertInstanceOf(ToolCallResult::class, $result0);
-            static::assertSame('call-w', $result0->toolCallId);
-            static::assertStringContainsString('"condition":"sunny"', $result0->content);
+            static::assertSame('call-r', $result0->toolCallId);
+            static::assertStringContainsString('"output":"ORNE Fhaqnl"', $result0->content);
             $result1 = $this->eventAt($results, 1);
             static::assertInstanceOf(ToolCallResult::class, $result1);
-            static::assertSame('call-n', $result1->toolCallId);
-            static::assertStringContainsString('"headline"', $result1->content);
+            static::assertSame('call-s', $result1->toolCallId);
+            static::assertStringContainsString('"similarity_percent"', $result1->content);
 
             $finished = $this->eventAt($events, count($events) - 1);
             static::assertInstanceOf(RunFinished::class, $finished);
@@ -164,8 +164,6 @@ final class InvocationsTest extends TestCase
         $offered = array_map(static fn(Tool $tool): string => $tool->name, $request0['tools']);
         static::assertSame(
             [
-                'weather_get',
-                'news_get',
                 'reminder_put',
                 'package_search',
                 'word_similarity_get',

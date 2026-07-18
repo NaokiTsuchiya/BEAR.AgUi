@@ -15,9 +15,9 @@ use function json_decode;
 
 /**
  * Real (non-canned) HTTP call to Packagist's public search API — unlike
- * weather_get/news_get (fixed demo values), this one round-trips a live
+ * the other pure-computation tools here, this one round-trips a live
  * third-party service, so calling it alongside the other `safe` tools
- * shows the parallel wave overlapping genuine network latency, not usleep().
+ * shows the parallel wave overlapping genuine network latency.
  *
  * ALPS marks `package_search` as `safe`, so the safeAndIdempotent policy
  * keeps it visible to the LLM and confirm-free, joining the parallel wave.

@@ -38,38 +38,12 @@ use const JSON_THROW_ON_ERROR;
  * from BEAR.Resource + ToolUseModule only — the app's own modules get
  * their coverage from the governance / integration tests.
  *
- * @mago-expect lint:too-many-methods
- *
  * One method per #[Tool] resource plus the collector/registry wiring test,
  * same convention as InvocationsTest.
  */
 #[CoversNothing]
 final class ToolResourcesTest extends TestCase
 {
-    public function testWeatherReturnsCannedConditionsForCity(): void
-    {
-        $resource = self::injector()->getInstance(ResourceInterface::class);
-
-        $ro = $resource->get('app://self/weather', ['city' => 'Tokyo']);
-
-        static::assertSame(200, $ro->code);
-        static::assertIsArray($ro->body);
-        static::assertSame('Tokyo', self::field($ro->body, 'city'));
-        static::assertSame('sunny', self::field($ro->body, 'condition'));
-    }
-
-    public function testNewsReturnsHeadlineForTopic(): void
-    {
-        $resource = self::injector()->getInstance(ResourceInterface::class);
-
-        $ro = $resource->get('app://self/news', ['topic' => 'php']);
-
-        static::assertSame(200, $ro->code);
-        static::assertIsArray($ro->body);
-        static::assertSame('php', self::field($ro->body, 'topic'));
-        static::assertNotSame('', self::field($ro->body, 'headline'));
-    }
-
     public function testMessagePostReportsSent(): void
     {
         $resource = self::injector()->getInstance(ResourceInterface::class);
@@ -167,8 +141,6 @@ final class ToolResourcesTest extends TestCase
 
         static::assertSame(
             [
-                'weather_get',
-                'news_get',
                 'message_post',
                 'reminder_put',
                 'package_search',
@@ -179,7 +151,7 @@ final class ToolResourcesTest extends TestCase
             array_map(static fn(Tool $tool): string => $tool->name, $tools),
         );
         static::assertSame(
-            [false, false, false, true, false, false, false, false],
+            [false, true, false, false, false, false],
             array_map(static fn(Tool $tool): bool => $tool->confirm, $tools),
         );
 
@@ -188,8 +160,6 @@ final class ToolResourcesTest extends TestCase
         $registry = $injector->getInstance(ToolRegistryInterface::class);
         static::assertSame(
             [
-                'weather_get',
-                'news_get',
                 'message_post',
                 'reminder_put',
                 'package_search',
