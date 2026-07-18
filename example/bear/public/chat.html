@@ -672,8 +672,8 @@
           <header>
             <h1>BEAR.AgUi — chat</h1>
             <p>
-              Build-tool-free React over AG-UI SSE. Try: “ROT13 BEAR Sunday and compare PHP vs PHP8.”
-              (parallel tools) or “Remind me to buy milk.” (interrupt)
+              ビルドツールなしの React × AG-UI SSE。お試し: 「“BEAR Sunday” を ROT13 して、東京の日の出も教えて」
+              （並列ツール）／「牛乳を買うのをリマインドして」（インタラプト）
             </p>
           </header>
           <main ref={scrollRef}>
@@ -695,12 +695,12 @@
                   }
                 }}
                 rows={2}
-                placeholder="Type a message…  (Enter to send, Shift+Enter for newline)"
+                placeholder="メッセージを入力…（Enter で送信、Shift+Enter で改行）"
                 disabled={busy}
                 autoFocus
               />
               <button type="submit" disabled={busy || input.trim() === ''}>
-                {busy ? '…' : 'Send'}
+                {busy ? '…' : '送信'}
               </button>
             </form>
           </footer>
