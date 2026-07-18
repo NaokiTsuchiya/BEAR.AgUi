@@ -748,7 +748,14 @@
                   className="preset"
                   title={preset.text}
                   disabled={busy}
-                  onClick={() => sendMessage(preset.text)}
+                  onClick={() => {
+                    // Fill the composer only — the presenter reviews and
+                    // submits (Enter / 送信) themselves.
+                    setInput(preset.text);
+                    if (inputRef.current !== null) {
+                      inputRef.current.focus();
+                    }
+                  }}
                 >
                   {preset.label}
                 </button>
