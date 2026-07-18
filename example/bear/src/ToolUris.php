@@ -14,7 +14,6 @@ final class ToolUris
     /** @var list<string> */
     public const ALL = [
         'app://self/message',
-        'app://self/reminder',
         'app://self/package',
         'app://self/similarity',
         'app://self/rot13',

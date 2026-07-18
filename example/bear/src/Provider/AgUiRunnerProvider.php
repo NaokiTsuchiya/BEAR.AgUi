@@ -19,8 +19,8 @@ use Ray\Di\ProviderInterface;
  * Assembles the AgUiRunner facade with the ALPS governance processors
  * (tasks-m3 T5, D27, ADR0004):
  *
- *  - safeAndIdempotent policy — `rot13_get`/`word_similarity_get`/
- *    `sun_info_get`/`package_search` (safe) and `reminder_put` (idempotent)
+ *  - safeAndIdempotent policy — the `safe` (and any `idempotent`) tools
+ *    `rot13_get`/`word_similarity_get`/`sun_info_get`/`package_search`
  *    pass, `message_post` (unsafe) is stripped from every LLM request;
  *  - AlpsContextInputProcessor, re-homed into the system prompt by
  *    {@see AlpsContextAsSystemPromptProcessor} — injects the profile's

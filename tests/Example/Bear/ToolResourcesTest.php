@@ -68,7 +68,7 @@ final class ToolResourcesTest extends TestCase
         static::assertSame('r-1', self::field($ro->body, 'id'));
     }
 
-    public function testPackageSearchReturnsTopResultForQuery(): void
+    public function testPackageSearchReturnsMatchingResultsForQuery(): void
     {
         $resource = self::injector()->getInstance(ResourceInterface::class);
 
@@ -77,8 +77,18 @@ final class ToolResourcesTest extends TestCase
         static::assertSame(200, $ro->code);
         static::assertIsArray($ro->body);
         static::assertTrue(self::field($ro->body, 'found'));
-        static::assertSame('bear/tool-use', self::field($ro->body, 'name'));
-        static::assertSame(12_345, self::field($ro->body, 'downloads'));
+        static::assertSame(1, self::field($ro->body, 'count'));
+        static::assertSame(
+            [
+                [
+                    'name' => 'bear/tool-use',
+                    'description' => 'Tool use for BEAR.Sunday',
+                    'url' => 'https://packagist.org/packages/bear/tool-use',
+                    'downloads' => 12_345,
+                ],
+            ],
+            self::field($ro->body, 'results'),
+        );
     }
 
     public function testWordSimilarityComparesTwoPhrases(): void
@@ -142,7 +152,6 @@ final class ToolResourcesTest extends TestCase
         static::assertSame(
             [
                 'message_post',
-                'reminder_put',
                 'package_search',
                 'word_similarity_get',
                 'rot13_get',
@@ -151,7 +160,7 @@ final class ToolResourcesTest extends TestCase
             array_map(static fn(Tool $tool): string => $tool->name, $tools),
         );
         static::assertSame(
-            [false, true, false, false, false, false],
+            [false, false, false, false, false],
             array_map(static fn(Tool $tool): bool => $tool->confirm, $tools),
         );
 
@@ -161,7 +170,6 @@ final class ToolResourcesTest extends TestCase
         static::assertSame(
             [
                 'message_post',
-                'reminder_put',
                 'package_search',
                 'word_similarity_get',
                 'rot13_get',
@@ -169,10 +177,10 @@ final class ToolResourcesTest extends TestCase
             ],
             $registry->getToolNames(),
         );
-        $mapping = $registry->get('reminder_put');
+        $mapping = $registry->get('rot13_get');
         static::assertNotNull($mapping);
-        static::assertSame('app://self/reminder', $mapping->resourceUri);
-        static::assertSame('put', $mapping->method);
+        static::assertSame('app://self/rot13', $mapping->resourceUri);
+        static::assertSame('get', $mapping->method);
     }
 
     /** @param array<array-key, mixed> $body */

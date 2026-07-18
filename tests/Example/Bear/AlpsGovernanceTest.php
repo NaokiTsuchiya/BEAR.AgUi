@@ -49,7 +49,6 @@ final class AlpsGovernanceTest extends TestCase
 
         static::assertSame(
             [
-                'reminder_put',
                 'package_search',
                 'word_similarity_get',
                 'rot13_get',
@@ -68,7 +67,6 @@ final class AlpsGovernanceTest extends TestCase
         static::assertSame(
             [
                 'message_post',
-                'reminder_put',
                 'package_search',
                 'word_similarity_get',
                 'rot13_get',

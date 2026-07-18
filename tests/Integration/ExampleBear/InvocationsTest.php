@@ -102,42 +102,6 @@ final class InvocationsTest extends TestCase
         });
     }
 
-    public function testConfirmableReminderInterruptsRun(): void
-    {
-        $llm = new FakeStreamingLlmClient();
-        $llm->queueScript([
-            new StreamEvent(StreamEvent::TEXT_DELTA, ['text' => 'Saving a reminder needs your approval.']),
-            new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
-            new StreamEvent(StreamEvent::TOOL_USE_START, ['id' => 'call-r', 'name' => 'reminder_put']),
-            new StreamEvent(StreamEvent::TOOL_USE_DELTA, ['input' => '{"id":"r-1","text":"buy milk"}']),
-            new StreamEvent(StreamEvent::CONTENT_BLOCK_STOP),
-            new StreamEvent(StreamEvent::MESSAGE_STOP, ['stopReason' => 'tool_use']),
-        ]);
-
-        $events = $this->drainRun($llm, 'remind me to buy milk');
-
-        $finished = $this->eventAt($events, count($events) - 1);
-        static::assertInstanceOf(RunFinished::class, $finished);
-        static::assertSame('interrupt', $this->outcomeType($finished));
-
-        $decoded = self::decodeJsonObject($finished);
-
-        /** @var mixed $rawOutcome */
-        $rawOutcome = $this->valueAt($decoded, 'outcome');
-        static::assertIsArray($rawOutcome);
-
-        /** @var mixed $rawInterrupts */
-        $rawInterrupts = $this->valueAt($rawOutcome, 'interrupts');
-        static::assertIsArray($rawInterrupts);
-
-        /** @var mixed $rawInterrupt0 */
-        $rawInterrupt0 = $this->valueAt($rawInterrupts, 0);
-        static::assertIsArray($rawInterrupt0);
-
-        static::assertSame('tool_confirmation', $this->valueAt($rawInterrupt0, 'reason'));
-        static::assertSame('call-r', $this->valueAt($rawInterrupt0, 'toolCallId'));
-    }
-
     public function testUnsafeMessagePostIsGovernedAwayByAlpsPolicy(): void
     {
         // The canned model tries to call message_post anyway; the ALPS
@@ -164,7 +128,6 @@ final class InvocationsTest extends TestCase
         $offered = array_map(static fn(Tool $tool): string => $tool->name, $request0['tools']);
         static::assertSame(
             [
-                'reminder_put',
                 'package_search',
                 'word_similarity_get',
                 'rot13_get',

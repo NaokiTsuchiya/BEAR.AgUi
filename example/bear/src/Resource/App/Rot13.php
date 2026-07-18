@@ -30,6 +30,7 @@ final class Rot13 extends ResourceObject
         $this->body = [
             'input' => $text,
             'output' => str_rot13($text),
+            'php_function' => 'str_rot13()',
         ];
 
         return $this;
