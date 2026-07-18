@@ -78,13 +78,17 @@ final class ToolResourcesTest extends TestCase
         static::assertIsArray($ro->body);
         static::assertTrue(self::field($ro->body, 'found'));
         static::assertSame(1, self::field($ro->body, 'count'));
-
-        $results = self::field($ro->body, 'results');
-        static::assertIsArray($results);
-        $top = $results[0];
-        static::assertIsArray($top);
-        static::assertSame('bear/tool-use', self::field($top, 'name'));
-        static::assertSame(12_345, self::field($top, 'downloads'));
+        static::assertSame(
+            [
+                [
+                    'name' => 'bear/tool-use',
+                    'description' => 'Tool use for BEAR.Sunday',
+                    'url' => 'https://packagist.org/packages/bear/tool-use',
+                    'downloads' => 12_345,
+                ],
+            ],
+            self::field($ro->body, 'results'),
+        );
     }
 
     public function testWordSimilarityComparesTwoPhrases(): void
