@@ -49,6 +49,7 @@ final class Similarity extends ResourceObject
             'b' => $b,
             'similarity_percent' => round((float) $percent, 1),
             'levenshtein_distance' => levenshtein($a, $b),
+            'php_function' => 'similar_text(), levenshtein()',
         ];
 
         return $this;

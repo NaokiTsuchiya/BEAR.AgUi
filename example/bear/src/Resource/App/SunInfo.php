@@ -66,6 +66,7 @@ final class SunInfo extends ResourceObject
             'sunrise_utc' => $this->formatMoment($info['sunrise']),
             'sunset_utc' => $this->formatMoment($info['sunset']),
             'solar_noon_utc' => $this->formatMoment($info['transit']),
+            'php_function' => 'date_sun_info()',
         ];
 
         return $this;
