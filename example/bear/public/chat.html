@@ -160,8 +160,24 @@
       padding: 1rem 1rem 1.75rem;
       background: linear-gradient(to top, #f4f5f7 55%, rgba(244, 245, 247, 0));
     }
-    /* One-click demo prompt chips above the composer — the presenter fires a
-       complex prompt without typing it live on stage. */
+    /* Demo prompt chips are hidden by default; this bar holds the toggle. */
+    .preset-bar {
+      max-width: 820px;
+      margin: 0 auto 0.5rem;
+      display: flex;
+    }
+    .preset-toggle {
+      font-size: 0.85rem;
+      padding: 0.25rem 0.5rem;
+      border: none;
+      background: none;
+      color: #57606a;
+      cursor: pointer;
+      border-radius: 0.4rem;
+    }
+    .preset-toggle:hover { color: #1a56db; }
+    /* One-click demo prompt chips above the composer — the presenter fills
+       the composer with a complex prompt without typing it live on stage. */
     .presets {
       max-width: 820px;
       margin: 0 auto 0.6rem;
@@ -659,6 +675,8 @@
       const [entries, setEntries] = React.useState([]);
       const [input, setInput] = React.useState('');
       const [busy, setBusy] = React.useState(false);
+      // Demo preset chips are hidden by default; a toggle reveals them.
+      const [showPresets, setShowPresets] = React.useState(false);
       // threadId is fixed for the page session, runId is fresh per turn —
       // the client issues both (the server only validates). The log lives
       // in a ref: it is the history ledger, not render state.
@@ -740,6 +758,17 @@
             </div>
           </main>
           <footer>
+            <div className="preset-bar">
+              <button
+                type="button"
+                className="preset-toggle"
+                aria-expanded={showPresets}
+                onClick={() => setShowPresets((shown) => !shown)}
+              >
+                {showPresets ? '▾ デモ例を隠す' : '▸ デモ例を表示'}
+              </button>
+            </div>
+            {showPresets && (
             <div className="presets">
               {DEMO_PROMPTS.map((preset) => (
                 <button
@@ -761,6 +790,7 @@
                 </button>
               ))}
             </div>
+            )}
             <form onSubmit={handleSubmit}>
               <textarea
                 ref={inputRef}
